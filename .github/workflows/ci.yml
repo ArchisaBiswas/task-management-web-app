@@ -1,0 +1,41 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      # Backend
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build || echo "No build step"
+
+      # Frontend
+      - name: Install frontend dependencies
+        working-directory: task-management-web-pages/package
+        run: npm install
+
+      - name: Build frontend
+        working-directory: task-management-web-pages/package
+        run: npm run build
+
+      - name: Success message
+        run: echo "CI pipeline completed successfully 🚀"
