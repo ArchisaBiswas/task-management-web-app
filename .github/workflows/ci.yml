@@ -12,18 +12,20 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4   # ✅ updated
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4  # ✅ updated
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # Debug step (VERY IMPORTANT)
+      # 🔍 Debug (optional but useful)
       - name: Show folder structure
         run: ls -R
 
-      # Backend
+      # =========================
+      # BACKEND
+      # =========================
       - name: Install backend dependencies
         working-directory: backend
         run: npm install
@@ -32,7 +34,9 @@ jobs:
         working-directory: backend
         run: npm run build || echo "No backend build step"
 
-      # Frontend (adjust path if needed)
+      # =========================
+      # FRONTEND
+      # =========================
       - name: Install frontend dependencies
         working-directory: task-management-web-pages/package
         run: npm install
