@@ -12,12 +12,16 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4   # ✅ updated
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4  # ✅ updated
         with:
           node-version: 18
+
+      # Debug step (VERY IMPORTANT)
+      - name: Show folder structure
+        run: ls -R
 
       # Backend
       - name: Install backend dependencies
@@ -26,9 +30,9 @@ jobs:
 
       - name: Build backend
         working-directory: backend
-        run: npm run build || echo "No build step"
+        run: npm run build || echo "No backend build step"
 
-      # Frontend
+      # Frontend (adjust path if needed)
       - name: Install frontend dependencies
         working-directory: task-management-web-pages/package
         run: npm install
@@ -37,5 +41,5 @@ jobs:
         working-directory: task-management-web-pages/package
         run: npm run build
 
-      - name: Success message
-        run: echo "CI pipeline completed successfully 🚀"
+      - name: Done
+        run: echo "CI completed successfully 🚀"
