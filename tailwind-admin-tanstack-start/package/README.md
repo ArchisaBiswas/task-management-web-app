@@ -1,1 +1,0 @@
-# tailwindadmin-react-free-tanstack

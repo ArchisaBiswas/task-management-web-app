@@ -1,8 +1,0 @@
-@use "sass:map";
-@use "@angular/material" as mat;
-
-@include mat.autocomplete-overrides(
-  (
-    container-elevation-shadow: var(--mat-sys-level2),
-  )
-);

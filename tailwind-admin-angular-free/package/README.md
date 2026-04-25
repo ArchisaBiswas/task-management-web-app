@@ -1,2 +1,0 @@
-# TailwindAdmin-Angular
-TailwindAdmin Angular
