@@ -5,6 +5,8 @@ import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
 import { useAuth } from 'src/context/AuthContext';
 
+const API = import.meta.env.VITE_API_URL;
+
 // Basic format check — trims whitespace before testing to avoid false negatives from copy-paste.
 const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 
@@ -36,7 +38,7 @@ const AuthLogin = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('${import.meta.env.VITE_API_URL}/login', {
+      const res = await fetch(`${API}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password }),

@@ -25,6 +25,8 @@ type DbUser = { user_id: number; name: string; timezone: string };
 type UserOption = DbUser & { officeStatus: 'In-Office' | 'Out-of-Office' };
 type AssignmentRow = { task_id: number; user_id: number };
 
+const API = import.meta.env.VITE_API_URL;
+
 // Returns whether the current local time in the given timezone falls within 09:00–17:00.
 const getOfficeStatus = (timezone: string): 'In-Office' | 'Out-of-Office' => {
   const hour =
@@ -79,9 +81,9 @@ const UpdateTaskForm = () => {
 
   useEffect(() => {
     Promise.all([
-      fetch('${import.meta.env.VITE_API_URL}/tasks').then((r) => r.json()),
-      fetch('${import.meta.env.VITE_API_URL}/users').then((r) => r.json()),
-      fetch('${import.meta.env.VITE_API_URL}/assignments').then((r) => r.json()),
+      fetch(`${API}/tasks`).then((r) => r.json()),
+      fetch(`${API}/users`).then((r) => r.json()),
+      fetch(`${API}/assignments`).then((r) => r.json()),
     ])
       .then(([tasksData, usersData, assignmentsData]) => {
         setTasks(tasksData);
@@ -133,7 +135,7 @@ const UpdateTaskForm = () => {
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
 
-      const taskRes = await fetch(`${import.meta.env.VITE_API_URL}/tasks/${selectedTaskId}`, {
+      const taskRes = await fetch(`${API}/tasks/${selectedTaskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -149,14 +151,14 @@ const UpdateTaskForm = () => {
 
       await Promise.all([
         ...toAdd.map((userId) =>
-          fetch('${import.meta.env.VITE_API_URL}/task-assignments', {
+          fetch(`${API}/task-assignments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ task_id: selectedTaskId, user_id: userId }),
           }),
         ),
         ...toRemove.map((userId) =>
-          fetch('${import.meta.env.VITE_API_URL}/task-assignments', {
+          fetch(`${API}/task-assignments`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ task_id: selectedTaskId, user_id: userId }),

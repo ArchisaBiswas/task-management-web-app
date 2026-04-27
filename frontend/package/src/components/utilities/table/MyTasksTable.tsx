@@ -56,6 +56,8 @@ export type EmployeeRow = {
   all_completed?: boolean;
 };
 
+const API = import.meta.env.VITE_API_URL;
+
 const priorityColors: Record<string, string> = {
   low: 'bg-primary text-white',
   medium: 'bg-warning text-white',
@@ -273,7 +275,7 @@ export const MyTasksTable = ({ data = [], onDataChange, userId, onMutation }: My
                   try {
                     // Backend deletes the assignment, then removes the task if no
                     // other assignments remain — so the tasks table stays clean.
-                    const res = await fetch('${import.meta.env.VITE_API_URL}/task-assignments', {
+                    const res = await fetch(`${API}/task-assignments`, {
                       method: 'DELETE',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ task_id: taskId, user_id: userId }),
@@ -558,7 +560,7 @@ export const MyTasksTable = ({ data = [], onDataChange, userId, onMutation }: My
                 try {
                   // Update task-level fields only when no co-assignees (full edit)
                   if (isFullEdit) {
-                    const res = await fetch(`${import.meta.env.VITE_API_URL}/tasks/${taskId}`, {
+                    const res = await fetch(`${API}/tasks/${taskId}`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ task_name: editTask, due_date: editDueDate, priority: editPriority }),
@@ -567,7 +569,7 @@ export const MyTasksTable = ({ data = [], onDataChange, userId, onMutation }: My
                   }
 
                   // Always update this user's status individually
-                  const statusRes = await fetch(`${import.meta.env.VITE_API_URL}/task-assignments/${taskId}/users/${userId}`, {
+                  const statusRes = await fetch(`${API}/task-assignments/${taskId}/users/${userId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: editStatus }),

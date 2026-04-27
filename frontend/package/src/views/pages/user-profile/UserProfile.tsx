@@ -10,6 +10,8 @@ import { Input } from "src/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "src/components/ui/select";
 import { useAuth, AuthUser } from "src/context/AuthContext";
 
+const API = import.meta.env.VITE_API_URL;
+
 const TIMEZONES = [
   'Pacific/Midway','Pacific/Honolulu','America/Anchorage','America/Los_Angeles',
   'America/Denver','America/Chicago','America/New_York','America/Caracas',
@@ -103,7 +105,7 @@ const UserProfile = () => {
     const handleSave = async () => {
         if (modalType === "personal") {
             const newName = `${tempPersonal.firstName} ${tempPersonal.lastName}`.trim();
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/users/${user!.user_id}`, {
+            const res = await fetch(`${API}/users/${user!.user_id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

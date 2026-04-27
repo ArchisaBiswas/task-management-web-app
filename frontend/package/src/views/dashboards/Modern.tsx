@@ -5,6 +5,8 @@ import ProfileWelcome from "src/components/dashboards/modern/ProfileWelcome";
 import { DataTable } from 'src/components/utilities/table/DataTable';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
+const API = import.meta.env.VITE_API_URL;
+
 // Formats the current time in a given IANA timezone as HH:MM; falls back to 'Invalid TZ' on error.
 function getLocalTime(timezone: string, now: Date): string {
     try {
@@ -62,7 +64,7 @@ const Moderndash = () => {
     // Fetches global task statistics and updates the stat card state.
     const fetchStats = useCallback(async () => {
         try {
-            const res = await fetch('${import.meta.env.VITE_API_URL}/stats');
+            const res = await fetch(`${API}/stats`);
             const d = await res.json();
             setStats({
                 allTasksCount: d.all_tasks,
@@ -84,7 +86,7 @@ const Moderndash = () => {
 
     useEffect(() => {
         fetchStats();
-        fetch('${import.meta.env.VITE_API_URL}/assignments')
+        fetch(`${API}/assignments`)
             .then((res) => res.json())
             .then(async (resData) => {
                 const nowCheck = new Date();
@@ -97,7 +99,7 @@ const Moderndash = () => {
                     const statusLower = (item.status ?? '').toLowerCase();
                     if (overdue && statusLower !== 'completed' && statusLower !== 'pending') {
                         patches.push(
-                            fetch(`${import.meta.env.VITE_API_URL}/tasks/${item.task_id}`, {
+                            fetch(`${API}/tasks/${item.task_id}`, {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ status: 'Pending' }),
@@ -136,7 +138,7 @@ const Moderndash = () => {
         setRawData(updated);
         Promise.all(
             overdueIds.map((id) =>
-                fetch(`${import.meta.env.VITE_API_URL}/tasks/${id}`, {
+                fetch(`${API}/tasks/${id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: 'Pending' }),

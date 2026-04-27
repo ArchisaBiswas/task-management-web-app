@@ -17,6 +17,8 @@ import {
 type DbUser = { user_id: number; name: string; timezone: string };
 type UserOption = DbUser & { officeStatus: 'In-Office' | 'Out-of-Office' };
 
+const API = import.meta.env.VITE_API_URL;
+
 const getOfficeStatus = (timezone: string): 'In-Office' | 'Out-of-Office' => {
   const hour =
     parseInt(
@@ -57,7 +59,7 @@ const Form = () => {
   const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
-    fetch('${import.meta.env.VITE_API_URL}/users')
+    fetch(`${API}/users`)
       .then((r) => r.json())
       .then((data: DbUser[]) =>
         setUsers(data.map((u) => ({ ...u, officeStatus: getOfficeStatus(u.timezone) }))),
@@ -87,7 +89,7 @@ const Form = () => {
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
 
-      const taskRes = await fetch('${import.meta.env.VITE_API_URL}/tasks', {
+      const taskRes = await fetch(`${API}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -102,7 +104,7 @@ const Form = () => {
 
       await Promise.all(
         selectedAssigneeIds.map((userId) =>
-          fetch('${import.meta.env.VITE_API_URL}/task-assignments', {
+          fetch(`${API}/task-assignments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ task_id, user_id: userId }),

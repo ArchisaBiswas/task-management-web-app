@@ -29,6 +29,8 @@ import userimg8 from 'src/assets/images/profile/user-8.jpg';
 import userimg9 from 'src/assets/images/profile/user-9.jpg';
 import userimg10 from 'src/assets/images/profile/user-10.jpg';
 
+const API = import.meta.env.VITE_API_URL;
+
 const userImages = [
   userimg1, userimg2, userimg3, userimg4, userimg5,
   userimg6, userimg7, userimg8, userimg9, userimg10,
@@ -125,7 +127,7 @@ const UpdateMyTaskForm = () => {
 
   useEffect(() => {
     if (!user) return;
-    fetch(`${import.meta.env.VITE_API_URL}/my-tasks/${user.user_id}`)
+    fetch(`${API}/my-tasks/${user.user_id}`)
       .then((r) => {
         if (!r.ok) throw new Error(r.statusText);
         return r.json() as Promise<ApiTask[]>;
@@ -200,7 +202,7 @@ const UpdateMyTaskForm = () => {
 
     setSaving(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/tasks/${selectedTask.task_id}`, {
+      const res = await fetch(`${API}/tasks/${selectedTask.task_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

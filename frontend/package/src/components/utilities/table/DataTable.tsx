@@ -42,6 +42,8 @@ import { Calendar } from 'src/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 import CardBox from '../../shared/CardBox';
 
+const API = import.meta.env.VITE_API_URL;
+
 const badgeColors = [
   'bg-blue-100 text-blue-700',
   'bg-green-100 text-green-700',
@@ -463,7 +465,7 @@ export const DataTable = <T extends Record<string, unknown>>({
                 try {
                   // Remove this user's assignment. The backend then checks whether
                   // any other assignees remain; if none do, it also deletes the task.
-                  const res = await fetch("${import.meta.env.VITE_API_URL}/task-assignments", {
+                  const res = await fetch(`${API}/task-assignments`, {
                     method: "DELETE",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ task_id: taskId, user_id: userId }),
@@ -767,7 +769,7 @@ export const DataTable = <T extends Record<string, unknown>>({
                   priority: editValues.priority ?? row.priority,
                 };
                 const taskRes = await fetch(
-                  `${import.meta.env.VITE_API_URL}/tasks/${row.task_id}`,
+                  `${API}/tasks/${row.task_id}`,
                   { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(taskPayload) }
                 );
                 if (!taskRes.ok) throw new Error("Task update failed");
@@ -775,7 +777,7 @@ export const DataTable = <T extends Record<string, unknown>>({
                 // Update this assignee's status individually
                 if (editValues.status !== undefined) {
                   const statusRes = await fetch(
-                    `${import.meta.env.VITE_API_URL}/task-assignments/${row.task_id}/users/${row.user_id}`,
+                    `${API}/task-assignments/${row.task_id}/users/${row.user_id}`,
                     { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: editValues.status }) }
                   );
                   if (!statusRes.ok) throw new Error("Status update failed");

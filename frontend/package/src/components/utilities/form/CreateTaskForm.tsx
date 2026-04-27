@@ -14,6 +14,8 @@ import {
 } from 'src/components/ui/select';
 import { useAuth } from 'src/context/AuthContext';
 
+const API = import.meta.env.VITE_API_URL;
+
 const priorityConfig: Record<string, { triggerCls: string; dotCls: string }> = {
   low:      { triggerCls: 'bg-primary      text-white border-primary',    dotCls: 'bg-primary' },
   medium:   { triggerCls: 'bg-warning      text-white border-warning',    dotCls: 'bg-warning' },
@@ -60,7 +62,7 @@ const CreateTaskForm = () => {
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
 
-      const taskRes = await fetch('${import.meta.env.VITE_API_URL}/tasks', {
+      const taskRes = await fetch(`${API}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -74,7 +76,7 @@ const CreateTaskForm = () => {
       if (!taskRes.ok) throw new Error('Failed to create task');
       const { task_id } = await taskRes.json();
 
-      const assignRes = await fetch('${import.meta.env.VITE_API_URL}/task-assignments', {
+      const assignRes = await fetch(`${API}/task-assignments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_id, user_id: user.user_id }),
