@@ -43,3 +43,24 @@ export const sendEmail = async (
     throw error;
   }
 };
+
+export const sendTaskAssignmentEmail = async (
+  toEmails: string[],
+  subject: string,
+  html: string
+) => {
+  const command = new SendEmailCommand({
+    Source: process.env.SES_FROM_EMAIL!,
+    Destination: {
+      ToAddresses: toEmails,
+    },
+    Message: {
+      Subject: { Data: subject },
+      Body: { Html: { Data: html } },
+    },
+  });
+
+  const response = await ses.send(command);
+  console.log("Task assignment email sent:", response);
+  return response;
+};

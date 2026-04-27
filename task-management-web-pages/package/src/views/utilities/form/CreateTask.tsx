@@ -3,13 +3,13 @@ import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 
 const BCrumb = [
   { to: '/', title: 'Home' },
-  { title: 'Add My Task' },
+  { title: 'Create My Task' },
 ];
 
 const CreateTask = () => {
   return (
     <>
-      <BreadcrumbComp title="Add My Task" items={BCrumb} />
+      <BreadcrumbComp title="Create My Task" items={BCrumb} />
       <CreateTaskForm />
     </>
   );

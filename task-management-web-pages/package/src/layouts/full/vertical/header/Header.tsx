@@ -1,6 +1,5 @@
 import { useState, useEffect, useEffectEvent } from 'react';
 import { Icon } from '@iconify/react';
-import Messages from './Messages';
 import FullLogo from '../../shared/logo/FullLogo';
 import Profile from './Profile';
 import SidebarLayout from '../sidebar/Sidebar';
@@ -109,9 +108,6 @@ const Header = () => {
                 </div>
               )}
 
-              {/* Messages Dropdown */}
-              <Messages />
-
               {/* Profile Dropdown */}
               <Profile />
             </div>
@@ -144,7 +140,6 @@ const Header = () => {
                     </span>
                   </div>
                 )}
-                <Messages />
                 <Profile />
               </div>
             </div>

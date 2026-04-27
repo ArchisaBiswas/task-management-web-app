@@ -7,7 +7,45 @@ import { Button } from "src/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "src/components/ui/dialog";
 import { Label } from "src/components/ui/label";
 import { Input } from "src/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "src/components/ui/select";
 import { useAuth, AuthUser } from "src/context/AuthContext";
+
+const TIMEZONES = [
+  'Pacific/Midway','Pacific/Honolulu','America/Anchorage','America/Los_Angeles',
+  'America/Denver','America/Chicago','America/New_York','America/Caracas',
+  'America/Halifax','America/Sao_Paulo','Atlantic/South_Georgia','Atlantic/Azores',
+  'Europe/London','Europe/Paris','Europe/Helsinki','Europe/Moscow',
+  'Asia/Dubai','Asia/Karachi','Asia/Kolkata','Asia/Dhaka',
+  'Asia/Bangkok','Asia/Shanghai','Asia/Tokyo','Australia/Sydney','Pacific/Auckland',
+] as const;
+
+const TIMEZONE_COUNTRY: Record<string, string> = {
+  'Pacific/Midway': 'United States',
+  'Pacific/Honolulu': 'United States',
+  'America/Anchorage': 'United States',
+  'America/Los_Angeles': 'United States',
+  'America/Denver': 'United States',
+  'America/Chicago': 'United States',
+  'America/New_York': 'United States',
+  'America/Caracas': 'Venezuela',
+  'America/Halifax': 'Canada',
+  'America/Sao_Paulo': 'Brazil',
+  'Atlantic/South_Georgia': 'South Georgia',
+  'Atlantic/Azores': 'Portugal',
+  'Europe/London': 'United Kingdom',
+  'Europe/Paris': 'France',
+  'Europe/Helsinki': 'Finland',
+  'Europe/Moscow': 'Russia',
+  'Asia/Dubai': 'United Arab Emirates',
+  'Asia/Karachi': 'Pakistan',
+  'Asia/Kolkata': 'India',
+  'Asia/Dhaka': 'Bangladesh',
+  'Asia/Bangkok': 'Thailand',
+  'Asia/Shanghai': 'China',
+  'Asia/Tokyo': 'Japan',
+  'Australia/Sydney': 'Australia',
+  'Pacific/Auckland': 'New Zealand',
+};
 
 const UserProfile = () => {
     const { user, login } = useAuth();
@@ -95,7 +133,7 @@ const UserProfile = () => {
                                 <div className="flex flex-wrap items-center gap-1 md:gap-3">
                                     <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{personal.role}</p>
                                     <div className="hidden h-4 w-px bg-gray-300 dark:bg-gray-700 xl:block"></div>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">{address.location}</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">{TIMEZONE_COUNTRY[personal.timeZone] ?? personal.timeZone}</p>
                                 </div>
                             </div>
                         </div>
@@ -176,12 +214,19 @@ const UserProfile = () => {
                             </div>
                             <div className="flex flex-col gap-2">
                                 <Label htmlFor="timeZone">Local Time Zone</Label>
-                                <Input
-                                    id="timeZone"
-                                    placeholder="e.g. America/Los_Angeles"
+                                <Select
                                     value={tempPersonal.timeZone}
-                                    onChange={(e) => setTempPersonal({ ...tempPersonal, timeZone: e.target.value })}
-                                />
+                                    onValueChange={(val) => setTempPersonal({ ...tempPersonal, timeZone: val })}
+                                >
+                                    <SelectTrigger id="timeZone" className="w-full">
+                                        <SelectValue placeholder="Select timezone" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {TIMEZONES.map((tz) => (
+                                            <SelectItem key={tz} value={tz}>{tz}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             {/* <div className="flex flex-col gap-2">
                                 <Label htmlFor="facebook">Facebook URL</Label>

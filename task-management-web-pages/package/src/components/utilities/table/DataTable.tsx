@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -103,40 +103,46 @@ function parseDueDate(str: string): Date | null {
   return new Date(year, month, day);
 }
 
-function applyEdits<T extends Record<string, unknown>>(original: T, edits: Record<string, string>): T {
-  const result = { ...original } as Record<string, unknown>;
-  for (const [key, val] of Object.entries(edits)) {
-    if (key.includes('.')) {
-      const [parent, child] = key.split('.');
-      result[parent] = { ...(result[parent] as Record<string, unknown>), [child]: val };
-    } else {
-      result[key] = val;
-    }
-  }
-  return result as T;
-}
 
 interface DynamicTableProps<T> {
   data?: T[];
   onDataChange?: (data: T[]) => void;
-  onRowSave?: (row: T) => void;
   hiddenColumns?: string[];
+  onMutation?: () => void;
 }
-
 
 export const DataTable = <T extends Record<string, unknown>>({
   data = [],
   onDataChange,
-  onRowSave,
   hiddenColumns = [],
+  onMutation,
 }: DynamicTableProps<T>) => {
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
   const [internalData, setInternalData] = useState<T[]>(() => [...data]);
   const [editRowIndex, setEditRowIndex] = useState<number | null>(null);
 
+  const prevIdsRef = useRef<string>('');
   useEffect(() => {
-    setInternalData([...data]);
+    const newIds = data.map((r) => String((r as any).task_id ?? '')).join(',');
+    if (newIds !== prevIdsRef.current) {
+      // Underlying tasks changed — full reset
+      prevIdsRef.current = newIds;
+      setInternalData([...data]);
+    } else {
+      // Only time-display fields changed — patch in place to preserve local edits
+      setInternalData((prev) =>
+        prev.map((prevRow, i) => {
+          const incoming = data[i];
+          if (!incoming) return prevRow;
+          return {
+            ...prevRow,
+            'local time': incoming['local time'] ?? prevRow['local time'],
+            'working hour status': incoming['working hour status'] ?? prevRow['working hour status'],
+          };
+        })
+      );
+    }
   }, [data]);
 
   useEffect(() => {
@@ -145,14 +151,19 @@ export const DataTable = <T extends Record<string, unknown>>({
 
   useEffect(() => {
     const autoUpdateStatus = () => {
-      const now = new Date(new Date().setHours(0, 0, 0, 0));
+      const now = new Date();
       setInternalData((prev) => {
         let changed = false;
         const updated = prev.map((row) => {
           const r = row as Record<string, unknown>;
-          if (String(r.status).toLowerCase() !== 'active') return row;
-          const dueDate = parseDueDate(String(r['due date'] ?? ''));
-          if (dueDate && dueDate < now) {
+          const statusLower = String(r.status ?? '').toLowerCase();
+          if (statusLower === 'completed' || statusLower === 'pending') return row;
+          const localDate = parseDueDate(String(r['due date'] ?? ''));
+          if (!localDate) return row;
+          const endOfDayGMT = new Date(Date.UTC(
+            localDate.getFullYear(), localDate.getMonth(), localDate.getDate() + 1,
+          ));
+          if (now >= endOfDayGMT) {
             changed = true;
             return { ...r, status: 'Pending' } as unknown as T;
           }
@@ -201,7 +212,7 @@ export const DataTable = <T extends Record<string, unknown>>({
 
     const baseColumns = keys.map((col) => ({
       accessorKey: col,
-      header: toTitleCase(col.replace(/([A-Z])/g, ' $1').trim()),
+      header: col === 'due date' ? 'Due Date (GMT)' : toTitleCase(col.replace(/([A-Z])/g, ' $1').trim()),
       cell: (info: CellContext<T, unknown>) => {
         const value = info.getValue();
 
@@ -458,6 +469,7 @@ export const DataTable = <T extends Record<string, unknown>>({
                   if (!res.ok) throw new Error("Delete failed");
 
                   setInternalData((prev) => prev.filter((_, i) => i !== row.index));
+                  onMutation?.();
                 } catch (err) {
                   console.error(err);
                   alert("Failed to delete assignment");
@@ -486,6 +498,7 @@ export const DataTable = <T extends Record<string, unknown>>({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    autoResetPageIndex: false,
     initialState: { pagination: { pageSize: paginationOptions[0] || 5 } },
   });
 
@@ -743,49 +756,41 @@ export const DataTable = <T extends Record<string, unknown>>({
 
               const row = internalData[editRowIndex] as any;
 
-              const payload = {
-                task_name: editValues.task ?? row.task,
-                due_date: row.due_date, // ✅ ALWAYS USE RAW VALUE
-                priority: editValues.priority ?? row.priority,
-                status: editValues.status ?? row.status,
-              };
-
               try {
-                const res = await fetch(
+                // Update task-level fields (name, priority, due_date)
+                const taskPayload = {
+                  task_name: editValues.task ?? row.task,
+                  due_date: row.due_date,
+                  priority: editValues.priority ?? row.priority,
+                };
+                const taskRes = await fetch(
                   `http://localhost:3000/tasks/${row.task_id}`,
-                  {
-                    method: "PATCH",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(payload),
-                  }
+                  { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(taskPayload) }
                 );
+                if (!taskRes.ok) throw new Error("Task update failed");
 
-                if (!res.ok) throw new Error("Update failed");
-
-                // OPTION 1 (simple)
-                // window.location.reload();
+                // Update this assignee's status individually
+                if (editValues.status !== undefined) {
+                  const statusRes = await fetch(
+                    `http://localhost:3000/task-assignments/${row.task_id}/users/${row.user_id}`,
+                    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: editValues.status }) }
+                  );
+                  if (!statusRes.ok) throw new Error("Status update failed");
+                }
 
                 setInternalData((prev) => {
                   const updated = [...prev];
-                  updated[editRowIndex] = {
-                    ...row,
-                    ...editValues,
-                  };
+                  updated[editRowIndex] = { ...row, ...editValues };
                   return updated;
                 });
-
-                // OPTION 2 (better later)
-                // update parent via onRowSave or refetch API
-
+                onMutation?.();
               } catch (err) {
                 console.error(err);
                 alert("Failed to update task");
               }
 
-  setEditRowIndex(null);
-}}
+              setEditRowIndex(null);
+            }}
           >
             Save Changes
           </Button>

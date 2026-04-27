@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import { TopCards } from 'src/components/dashboards/modern/TopCards';
 import { MyTasksTable } from 'src/components/utilities/table/MyTasksTable';
 import type { EmployeeRow } from 'src/components/utilities/table/MyTasksTable';
+import ProfileWelcome from 'src/components/dashboards/modern/ProfileWelcome';
 import { useAuth } from 'src/context/AuthContext';
 
 import userimg1 from 'src/assets/images/profile/user-1.jpg';
@@ -27,7 +27,16 @@ type ApiTask = {
   due_date: string | Date;
   priority: string;
   status: string;
+  all_completed: boolean;
   co_assignees: { user_id: number; name: string; timezone: string }[];
+};
+
+type Stats = {
+  allTasksCount: number;
+  completedCount: number;
+  pendingCount: number;
+  priorityCount: number;
+  nonPriorityCount: number;
 };
 
 const formatDueDate = (raw: string | Date): string => {
@@ -41,38 +50,72 @@ const formatDueDate = (raw: string | Date): string => {
   return `${day}${suffix} ${month}, ${d.getUTCFullYear()}`;
 };
 
-const calcPriority = (rows: EmployeeRow[]) =>
-  rows.filter((r) => ['critical', 'high'].includes(r.priority.toLowerCase()) && r.status.toLowerCase() !== 'completed').length;
-
-const calcNonPriority = (rows: EmployeeRow[]) =>
-  rows.filter((r) => ['low', 'medium'].includes(r.priority.toLowerCase()) && r.status.toLowerCase() !== 'completed').length;
-
-const BCrumb = [
-  { to: '/', title: 'Home' },
-  { title: 'My Tasks' },
-];
-
 const AllTasksPage = () => {
   const { user } = useAuth();
   const [apiData, setApiData] = useState<ApiTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<Stats>({
+    allTasksCount: 0,
+    completedCount: 0,
+    pendingCount: 0,
+    priorityCount: 0,
+    nonPriorityCount: 0,
+  });
 
-  const [taskCount, setTaskCount] = useState(0);
-  const [completedCount, setCompletedCount] = useState(0);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [priorityCount, setPriorityCount] = useState(0);
-  const [nonPriorityCount, setNonPriorityCount] = useState(0);
+  const fetchStats = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`/api/stats/user/${user.user_id}`);
+      const d = await res.json();
+      setStats({
+        allTasksCount: d.all_tasks,
+        completedCount: d.completed,
+        pendingCount: d.pending,
+        priorityCount: d.priority_tasks,
+        nonPriorityCount: d.non_priority_tasks,
+      });
+    } catch (err) {
+      console.error('Failed to fetch stats:', err);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
+    fetchStats();
     fetch(`/api/my-tasks/${user.user_id}`)
       .then((r) => {
         if (!r.ok) throw new Error(r.statusText);
         return r.json() as Promise<ApiTask[]>;
       })
-      .then((data) => {
-        setApiData(data);
+      .then(async (data) => {
+        const now = new Date();
+        const patches: Promise<any>[] = [];
+
+        const enriched = data.map((task) => {
+          const due = new Date(task.due_date);
+          const endOfDayGMT = new Date(Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate() + 1));
+          const overdue = now >= endOfDayGMT;
+          const statusLower = (task.status ?? '').toLowerCase();
+          if (overdue && statusLower !== 'completed' && statusLower !== 'pending') {
+            patches.push(
+              fetch(`/api/tasks/${task.task_id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'Pending' }),
+              })
+            );
+            return { ...task, status: 'Pending' };
+          }
+          return task;
+        });
+
+        if (patches.length) {
+          await Promise.all(patches);
+          fetchStats();
+        }
+
+        setApiData(enriched);
         setLoading(false);
       })
       .catch((err) => {
@@ -80,80 +123,100 @@ const AllTasksPage = () => {
         setError('Could not load tasks. Make sure the backend is running on port 3000.');
         setLoading(false);
       });
-  }, [user]);
+  }, [user, fetchStats]);
+
+  // Continuously check for tasks that become overdue while page is open (every 60s)
+  useEffect(() => {
+    if (!apiData.length) return;
+    const id = setInterval(() => {
+      const now = new Date();
+      const overdueIds: number[] = [];
+      const updated = apiData.map((task) => {
+        const due = new Date(task.due_date);
+        const endOfDayGMT = new Date(Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate() + 1));
+        const statusLower = (task.status ?? '').toLowerCase();
+        if (now >= endOfDayGMT && statusLower !== 'completed' && statusLower !== 'pending') {
+          overdueIds.push(task.task_id);
+          return { ...task, status: 'Pending' };
+        }
+        return task;
+      });
+      if (!overdueIds.length) return;
+      setApiData(updated);
+      Promise.all(
+        overdueIds.map((taskId) =>
+          fetch(`/api/tasks/${taskId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'Pending' }),
+          }).catch(console.error)
+        )
+      ).then(() => fetchStats());
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [apiData, fetchStats]);
 
   const rows = useMemo<EmployeeRow[]>(
     () =>
-      apiData.map((task) => ({
-        task_id: task.task_id,
-        coAssignees: task.co_assignees.map((ca) => ({
-          text: ca.name,
-          image: userImages[(ca.user_id - 1) % userImages.length],
-          timezone: ca.timezone,
-        })),
-        task: task.task_name,
-        'due date': formatDueDate(task.due_date),
-        priority: task.priority,
-        status: task.status,
-      })),
+      apiData.map((task) => {
+        const d = task.due_date instanceof Date ? task.due_date : new Date(task.due_date);
+        return {
+          task_id: task.task_id,
+          coAssignees: task.co_assignees.map((ca) => ({
+            text: ca.name,
+            image: userImages[(ca.user_id - 1) % userImages.length],
+            timezone: ca.timezone,
+          })),
+          task: task.task_name,
+          'due date': formatDueDate(task.due_date),
+          rawDueDate: d.toISOString().split('T')[0],
+          priority: task.priority,
+          status: task.status,
+          all_completed: task.all_completed,
+        };
+      }),
     [apiData],
   );
 
-  useEffect(() => {
-    if (rows.length === 0) return;
-    setTaskCount(rows.length);
-    setCompletedCount(rows.filter((r) => r.status.toLowerCase() === 'completed').length);
-    setPendingCount(rows.filter((r) => r.status.toLowerCase() === 'pending').length);
-    setPriorityCount(calcPriority(rows));
-    setNonPriorityCount(calcNonPriority(rows));
-  }, [rows]);
-
-  const handleDataChange = useCallback((d: EmployeeRow[]) => {
-    setTaskCount(d.length);
-    setCompletedCount(d.filter((r) => r.status.toLowerCase() === 'completed').length);
-    setPendingCount(d.filter((r) => r.status.toLowerCase() === 'pending').length);
-    setPriorityCount(calcPriority(d));
-    setNonPriorityCount(calcNonPriority(d));
-  }, []);
-
   return (
-    <>
-      <BreadcrumbComp title="My Tasks" items={BCrumb} />
-      <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12">
-          <TopCards
-            allTasksCount={taskCount}
-            completedCount={completedCount}
-            pendingCount={pendingCount}
-            priorityCount={priorityCount}
-            nonPriorityCount={nonPriorityCount}
-          />
-        </div>
-        <div className="col-span-12 flex">
-          <div className="flex gap-6 flex-col w-full min-w-0">
-            {loading && (
-              <div className="text-center py-16 text-gray-500 dark:text-white/50 text-sm">
-                Loading tasks…
-              </div>
-            )}
-            {error && (
-              <div className="text-center py-16 text-red-500 text-sm">{error}</div>
-            )}
-            {!loading && !error && rows.length === 0 && (
-              <div className="text-center py-16 text-gray-500 dark:text-white/50 text-sm">
-                No tasks assigned to you.
-              </div>
-            )}
-            {!loading && !error && rows.length > 0 && (
-              <MyTasksTable
-                data={rows}
-                onDataChange={handleDataChange}
-              />
-            )}
-          </div>
+    <div className="grid grid-cols-12 gap-6">
+      <div className="col-span-12">
+        <ProfileWelcome />
+      </div>
+      <div className="col-span-12">
+        <TopCards
+          allTasksCount={stats.allTasksCount}
+          completedCount={stats.completedCount}
+          pendingCount={stats.pendingCount}
+          priorityCount={stats.priorityCount}
+          nonPriorityCount={stats.nonPriorityCount}
+        />
+      </div>
+      <div className="col-span-12 flex">
+        <div className="flex gap-6 flex-col w-full min-w-0">
+          {loading && (
+            <div className="text-center py-16 text-gray-500 dark:text-white/50 text-sm">
+              Loading tasks…
+            </div>
+          )}
+          {error && (
+            <div className="text-center py-16 text-red-500 text-sm">{error}</div>
+          )}
+          {!loading && !error && rows.length === 0 && (
+            <div className="text-center py-16 text-gray-500 dark:text-white/50 text-sm">
+              No tasks assigned to you.
+            </div>
+          )}
+          {!loading && !error && rows.length > 0 && (
+            <MyTasksTable
+              data={rows}
+              userId={user?.user_id}
+              onMutation={fetchStats}
+            />
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

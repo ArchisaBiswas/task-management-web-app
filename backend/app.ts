@@ -1,5 +1,8 @@
+import "dotenv/config";
 import express from "express";
+import bcrypt from "bcryptjs";
 import { db } from "./db";
+import { sendTaskAssignmentEmail } from "./ses-email";
 
 const app = express();
 app.use(express.json());
@@ -18,7 +21,7 @@ app.use((req, res, next) => {
 });
 
 // 👇 ADD THIS ROUTE
-app.get("/assignments", async (req, res) => {
+app.get("/assignments", async (_req, res) => {
   try {
     const query = `
       SELECT
@@ -29,7 +32,7 @@ app.get("/assignments", async (req, res) => {
         t.task_name,
         t.due_date,
         t.priority,
-        t.status
+        ta.status
       FROM users u
       JOIN task_assignments ta ON u.user_id = ta.user_id
       JOIN tasks t ON ta.task_id = t.task_id
@@ -61,9 +64,10 @@ app.get("/my-tasks/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // All tasks assigned to this user
+    // All tasks assigned to this user, using per-assignee status from task_assignments
     const [taskRows] = await db.query(
-      `SELECT t.task_id, t.task_name, t.due_date, t.priority, t.status
+      `SELECT t.task_id, t.task_name, t.due_date, t.priority, ta.status, t.created_by,
+              (SELECT COUNT(*) = 0 FROM task_assignments ta2 WHERE ta2.task_id = t.task_id AND LOWER(ta2.status) != 'completed') AS all_completed
        FROM tasks t
        JOIN task_assignments ta ON t.task_id = ta.task_id
        WHERE ta.user_id = ?
@@ -102,6 +106,8 @@ app.get("/my-tasks/:userId", async (req, res) => {
       due_date: t.due_date,
       priority: t.priority,
       status: t.status,
+      all_completed: !!t.all_completed,
+      created_by: t.created_by ?? null,
       co_assignees: coMap.get(t.task_id) ?? [],
     }));
 
@@ -117,33 +123,130 @@ app.patch("/tasks/:taskId", async (req, res) => {
     const { taskId } = req.params;
     const { task_name, due_date, priority, status } = req.body;
 
-    console.log("PATCH /tasks/:taskId hit");
-    console.log("taskId:", taskId);
-    console.log("body:", req.body);
+    // Update task-level fields in tasks table
+    const taskFields: string[] = [];
+    const taskValues: unknown[] = [];
+    if (task_name !== undefined) { taskFields.push('task_name = ?'); taskValues.push(task_name); }
+    if (due_date !== undefined)  { taskFields.push('due_date = ?');  taskValues.push(due_date);  }
+    if (priority !== undefined)  { taskFields.push('priority = ?');  taskValues.push(priority);  }
 
-    const fields: string[] = [];
-    const values: unknown[] = [];
+    if (taskFields.length > 0) {
+      await db.query(`UPDATE tasks SET ${taskFields.join(', ')} WHERE task_id = ?`, [...taskValues, taskId]);
+    }
 
-    if (task_name !== undefined) { fields.push('task_name = ?'); values.push(task_name); }
-    if (due_date !== undefined)  { fields.push('due_date = ?');  values.push(due_date);  }
-    if (priority !== undefined)  { fields.push('priority = ?');  values.push(priority);  }
-    if (status !== undefined)    { fields.push('status = ?');    values.push(status);    }
+    // Status is per-assignee — update all non-completed rows for this task
+    if (status !== undefined) {
+      await db.query(
+        `UPDATE task_assignments SET status = ? WHERE task_id = ? AND LOWER(status) != 'completed'`,
+        [status, taskId]
+      );
+    }
 
-    if (fields.length === 0) {
+    if (taskFields.length === 0 && status === undefined) {
       res.status(400).json({ error: 'No fields to update' });
       return;
     }
 
-    const sql = `UPDATE tasks SET ${fields.join(', ')} WHERE task_id = ?`;
-    console.log("SQL:", sql);
-    console.log("values:", [...values, taskId]);
-
-    const [result] = await db.query(sql, [...values, taskId]);
-    console.log("result:", result);
     res.json({ success: true });
   } catch (error) {
     console.error("DB ERROR:", error);
     res.status(500).json({ error: "Failed to update task" });
+  }
+});
+
+// Update a single assignee's status for a task
+app.patch("/task-assignments/:taskId/users/:userId", async (req, res) => {
+  try {
+    const { taskId, userId } = req.params;
+    const { status } = req.body;
+    if (!status) {
+      res.status(400).json({ error: 'status is required' });
+      return;
+    }
+    await db.query(
+      `UPDATE task_assignments SET status = ? WHERE task_id = ? AND user_id = ?`,
+      [status, taskId, userId]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ error: "Failed to update assignment status" });
+  }
+});
+
+// Stat card counts for all tasks
+app.get("/stats", async (_req, res) => {
+  try {
+    const [[row]] = await db.query(`
+      SELECT
+        (SELECT COUNT(*) FROM tasks) AS all_tasks,
+        (SELECT COUNT(*) FROM tasks t
+         WHERE (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id) > 0
+           AND (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') = 0
+        ) AS completed,
+        (SELECT COUNT(*) FROM tasks t
+         WHERE (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status = 'Pending') > 0
+           AND (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') > 0
+        ) AS pending,
+        (SELECT COUNT(*) FROM tasks t
+         WHERE t.priority IN ('High', 'Critical')
+           AND (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') > 0
+        ) AS priority_tasks,
+        (SELECT COUNT(*) FROM tasks t
+         WHERE t.priority IN ('Low', 'Medium')
+           AND (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') > 0
+        ) AS non_priority_tasks
+    `) as any[];
+    res.json({
+      all_tasks: Number(row.all_tasks),
+      completed: Number(row.completed),
+      pending: Number(row.pending),
+      priority_tasks: Number(row.priority_tasks),
+      non_priority_tasks: Number(row.non_priority_tasks),
+    });
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ error: "Failed to fetch stats" });
+  }
+});
+
+// Stat card counts for tasks assigned to a specific user
+app.get("/stats/user/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const [[row]] = await db.query(`
+      SELECT
+        (SELECT COUNT(DISTINCT ta.task_id) FROM task_assignments ta WHERE ta.user_id = ?) AS all_tasks,
+        (SELECT COUNT(*) FROM tasks t
+         JOIN task_assignments ta_u ON ta_u.task_id = t.task_id AND ta_u.user_id = ?
+         WHERE (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') = 0
+        ) AS completed,
+        (SELECT COUNT(*) FROM tasks t
+         JOIN task_assignments ta_u ON ta_u.task_id = t.task_id AND ta_u.user_id = ?
+         WHERE (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status = 'Pending') > 0
+           AND (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') > 0
+        ) AS pending,
+        (SELECT COUNT(*) FROM tasks t
+         JOIN task_assignments ta_u ON ta_u.task_id = t.task_id AND ta_u.user_id = ?
+         WHERE t.priority IN ('High', 'Critical')
+           AND (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') > 0
+        ) AS priority_tasks,
+        (SELECT COUNT(*) FROM tasks t
+         JOIN task_assignments ta_u ON ta_u.task_id = t.task_id AND ta_u.user_id = ?
+         WHERE t.priority IN ('Low', 'Medium')
+           AND (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') > 0
+        ) AS non_priority_tasks
+    `, [userId, userId, userId, userId, userId]) as any[];
+    res.json({
+      all_tasks: Number(row.all_tasks),
+      completed: Number(row.completed),
+      pending: Number(row.pending),
+      priority_tasks: Number(row.priority_tasks),
+      non_priority_tasks: Number(row.non_priority_tasks),
+    });
+  } catch (error) {
+    console.error("DB ERROR:", error);
+    res.status(500).json({ error: "Failed to fetch user stats" });
   }
 });
 
@@ -171,13 +274,13 @@ app.get("/users", async (_req, res) => {
 
 app.post("/tasks", async (req, res) => {
   try {
-    const { task_name, due_date, priority, status } = req.body;
+    const { task_name, due_date, priority, status, created_by } = req.body;
     if (!task_name || !due_date || !priority || !status) {
       return res.status(400).json({ error: "All fields required" });
     }
     const [result] = await db.query(
-      "INSERT INTO tasks (task_name, due_date, priority, status) VALUES (?, ?, ?, ?)",
-      [task_name, due_date, priority, status]
+      "INSERT INTO tasks (task_name, due_date, priority, status, created_by) VALUES (?, ?, ?, ?, ?)",
+      [task_name, due_date, priority, status, created_by ?? 1]
     ) as any[];
     res.json({ task_id: result.insertId });
   } catch (error) {
@@ -196,6 +299,55 @@ app.post("/task-assignments", async (req, res) => {
       "INSERT INTO task_assignments (task_id, user_id) VALUES (?, ?)",
       [task_id, user_id]
     );
+
+    // Send email notification to all assignees of this task
+    try {
+      const [taskRows] = await db.query(
+        "SELECT task_name, due_date, priority, status FROM tasks WHERE task_id = ?",
+        [task_id]
+      ) as any[];
+
+      const [emailRows] = await db.query(
+        `SELECT u.email FROM users u
+         JOIN task_assignments ta ON u.user_id = ta.user_id
+         WHERE ta.task_id = ? AND u.email IS NOT NULL`,
+        [task_id]
+      ) as any[];
+
+      const emails = (emailRows as any[]).map((r: any) => r.email as string).filter(Boolean);
+
+      if (emails.length && (taskRows as any[]).length) {
+        const task = (taskRows as any[])[0];
+        const subject = `[TaskMent] New Task Assigned — ${task.task_name}`;
+        const due = new Date(task.due_date).toLocaleDateString("en-GB", {
+          day: "numeric", month: "long", year: "numeric",
+        });
+        const row = (label: string, value: string) =>
+          `<tr>
+            <td style="padding:6px 16px 6px 0;color:#6b7280;font-weight:600;white-space:nowrap;vertical-align:top;">${label}</td>
+            <td style="padding:6px 4px;color:#6b7280;">:</td>
+            <td style="padding:6px 0 6px 12px;color:#111827;">${value}</td>
+          </tr>`;
+        const html =
+          `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111827;max-width:560px;margin:0 auto;">
+            <p style="margin:0 0 16px;">Dear Team Member,</p>
+            <p style="margin:0 0 20px;">You have been assigned a new task. Please find the details below:</p>
+            <table style="border-collapse:collapse;">
+              ${row("Task", task.task_name)}
+              ${row("Due Date", due)}
+              ${row("Priority", task.priority)}
+              ${row("Status", task.status)}
+            </table>
+            <p style="margin:24px 0 8px;">Kindly log in to TaskMent and ensure this task is completed by the due date.</p>
+            <p style="margin:0;">Thank you.</p>
+            <p style="margin:0;">Regards,<br><strong>TaskMent</strong></p>
+          </div>`;
+        await sendTaskAssignmentEmail(emails, subject, html);
+      }
+    } catch (emailErr) {
+      console.error("Email notification error:", emailErr);
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error("DB ERROR:", error);
@@ -263,13 +415,19 @@ app.post("/login", async (req, res) => {
       return res.status(400).json({ error: "email and password required" });
     }
     const [rows] = await db.query(
-      "SELECT user_id, name, email, role, timezone FROM users WHERE email = ? AND password = ?",
-      [email, password]
+      "SELECT user_id, name, email, role, timezone, password AS hashed FROM users WHERE email = ?",
+      [email]
     ) as any[];
     if (!(rows as any[]).length) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
-    res.json((rows as any[])[0]);
+    const user = (rows as any[])[0];
+    const valid = await bcrypt.compare(password, user.hashed);
+    if (!valid) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+    const { hashed: _h, ...safeUser } = user;
+    res.json(safeUser);
   } catch (error) {
     console.error("DB ERROR:", error);
     res.status(500).json({ error: "Failed to login" });
@@ -289,9 +447,10 @@ app.post("/register", async (req, res) => {
     if ((existing as any[]).length) {
       return res.status(409).json({ error: "Email already registered" });
     }
+    const hashed = await bcrypt.hash(password, 10);
     await db.query(
       "INSERT INTO users (name, email, password, timezone, role) VALUES (?, ?, ?, ?, 'assignee')",
-      [name, email, password, timezone]
+      [name, email, hashed, timezone]
     );
     res.json({ success: true });
   } catch (error) {
@@ -299,6 +458,7 @@ app.post("/register", async (req, res) => {
     res.status(500).json({ error: "Failed to register" });
   }
 });
+
 
 app.listen(3000, () => {
   console.log("Server running on port 3000");

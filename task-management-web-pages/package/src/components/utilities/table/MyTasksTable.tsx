@@ -22,7 +22,7 @@ import {
 import { Input } from 'src/components/ui/input';
 import { Button } from 'src/components/ui/button';
 import { Label } from 'src/components/ui/label';
-import { ArrowUp, ArrowDown, ChevronsUpDown, Pencil } from 'lucide-react';
+import { ArrowUp, ArrowDown, ChevronsUpDown, Pencil, Trash2 } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -50,8 +50,10 @@ export type EmployeeRow = {
   coAssignees: CoAssignee[];
   task: string;
   'due date': string;
+  rawDueDate?: string;
   priority: string;
   status: string;
+  all_completed?: boolean;
 };
 
 const priorityColors: Record<string, string> = {
@@ -88,16 +90,32 @@ const computeWorkingStatus = (timezone: string, now: Date): string => {
   return hour >= 9 && hour < 17 ? 'In-Office' : 'Out-of-Office';
 };
 
+const formatDisplayDate = (iso: string): string => {
+  const d = new Date(iso + 'T00:00:00Z');
+  const day = d.getUTCDate();
+  const suffix =
+    day % 10 === 1 && day !== 11 ? 'st' :
+    day % 10 === 2 && day !== 12 ? 'nd' :
+    day % 10 === 3 && day !== 13 ? 'rd' : 'th';
+  const month = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+  return `${day}${suffix} ${month}, ${d.getUTCFullYear()}`;
+};
+
 interface MyTasksTableProps {
   data?: EmployeeRow[];
   onDataChange?: (data: EmployeeRow[]) => void;
+  userId?: number;
+  onMutation?: () => void;
 }
 
-export const MyTasksTable = ({ data = [], onDataChange }: MyTasksTableProps) => {
+export const MyTasksTable = ({ data = [], onDataChange, userId, onMutation }: MyTasksTableProps) => {
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
   const [internalData, setInternalData] = useState<EmployeeRow[]>(() => [...data]);
   const [editRowIndex, setEditRowIndex] = useState<number | null>(null);
+  const [editTask, setEditTask] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editPriority, setEditPriority] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -176,7 +194,7 @@ export const MyTasksTable = ({ data = [], onDataChange }: MyTasksTableProps) => 
     },
     {
       id: 'due-date',
-      header: 'Due Date',
+      header: 'Due Date (GMT)',
       accessorKey: 'due date',
       enableSorting: true,
       cell: ({ getValue }) => (
@@ -217,22 +235,54 @@ export const MyTasksTable = ({ data = [], onDataChange }: MyTasksTableProps) => 
       id: 'action',
       header: 'Action',
       enableSorting: false,
-      cell: ({ row }) => (
-        <Button
-          size="sm"
-          variant="lightprimary"
-          className="size-8! rounded-full"
-          onClick={() => {
-            setEditRowIndex(row.index);
-            setEditStatus(row.original.status);
-            setPopupNow(new Date());
-          }}
-        >
-          <Pencil className="size-5" />
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const noCoAssignees = row.original.coAssignees.length === 0;
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="lightprimary"
+              className="size-8! rounded-full"
+              onClick={() => {
+                setEditRowIndex(row.index);
+                setEditTask(row.original.task);
+                setEditDueDate(row.original.rawDueDate ?? '');
+                setEditPriority(row.original.priority);
+                setEditStatus(row.original.status);
+                setPopupNow(new Date());
+              }}
+            >
+              <Pencil className="size-5" />
+            </Button>
+            {noCoAssignees && (
+              <Button
+                size="sm"
+                variant="lighterror"
+                className="size-8! rounded-full"
+                onClick={async () => {
+                  const taskId = row.original.task_id;
+                  try {
+                    const res = await fetch('/api/task-assignments', {
+                      method: 'DELETE',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ task_id: taskId, user_id: userId }),
+                    });
+                    if (!res.ok) throw new Error('Delete failed');
+                    setInternalData((prev) => prev.filter((_, i) => i !== row.index));
+                    onMutation?.();
+                  } catch {
+                    alert('Failed to delete task. Please try again.');
+                  }
+                }}
+              >
+                <Trash2 className="size-5" />
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
-  ], []);
+  ], [userId]);
 
   const table = useReactTable({
     data: internalData,
@@ -249,6 +299,9 @@ export const MyTasksTable = ({ data = [], onDataChange }: MyTasksTableProps) => 
   });
 
   const paginationOptions = useMemo(() => [5, 10, 20].filter((s) => s <= data.length), [data.length]);
+
+  const editingRow = editRowIndex !== null ? internalData[editRowIndex] : null;
+  const isFullEdit = editingRow !== null && editingRow.coAssignees.length === 0;
 
   return (
     <>
@@ -346,138 +399,186 @@ export const MyTasksTable = ({ data = [], onDataChange }: MyTasksTableProps) => 
         </div>
       </CardBox>
 
-      {/* Task Detail Dialog */}
+      {/* Task Detail / Edit Dialog */}
       <Dialog open={editRowIndex !== null} onOpenChange={(open) => { if (!open) setEditRowIndex(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="mb-2">Task Details</DialogTitle>
           </DialogHeader>
-          {editRowIndex !== null && (() => {
-            const row = internalData[editRowIndex];
-            const priorityCls = priorityColors[row.priority.toLowerCase()] ?? 'bg-primary text-white';
-            const currentStatusCls = statusColors[row.status.toLowerCase()] ?? 'bg-gray-100 text-gray-700';
-            return (
-              <div className="flex flex-col gap-4">
+          {editingRow !== null && (
+            <div className="flex flex-col gap-4">
 
-                {/* Task */}
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-white/50 mb-1">Task</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{row.task}</p>
-                </div>
+              {/* Task */}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-task">Task</Label>
+                {isFullEdit ? (
+                  <Input
+                    id="edit-task"
+                    value={editTask}
+                    onChange={(e) => setEditTask(e.target.value)}
+                  />
+                ) : (
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{editingRow.task}</p>
+                )}
+              </div>
 
-                {/* Due Date & Priority */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-white/50 mb-1">Due Date</p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{row['due date']}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-white/50 mb-1">Priority</p>
-                    <Badge className={`text-xs rounded-full py-1 px-3 ${priorityCls}`}>
-                      {row.priority}
-                    </Badge>
-                  </div>
-                </div>
-
-                {/* Current Status */}
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-white/50 mb-1">Current Status</p>
-                  <Badge className={`px-2 py-1 rounded-full text-xs font-medium ${currentStatusCls}`}>
-                    {row.status}
-                  </Badge>
-                </div>
-
-                {/* Co-Assignees with real-time clock */}
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-white/50 mb-2">Co-Assignees</p>
-                  {row.coAssignees.length === 0 ? (
-                    <p className="text-sm text-gray-400 dark:text-white/30">No co-assignees for this task.</p>
+              {/* Due Date & Priority */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="edit-due-date">Due Date</Label>
+                  {isFullEdit ? (
+                    <input
+                      id="edit-due-date"
+                      type="date"
+                      value={editDueDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setEditDueDate(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-gray-900 dark:text-white"
+                    />
                   ) : (
-                    <div className="flex flex-col gap-2">
-                      {row.coAssignees.map((ca, i) => {
-                        const localTime = computeLocalTime(ca.timezone, popupNow);
-                        const workingStatus = computeWorkingStatus(ca.timezone, popupNow);
-                        return (
-                          <div
-                            key={i}
-                            className="flex items-center gap-3 p-2.5 bg-gray-50 dark:bg-white/5 rounded-lg"
-                          >
-                            {ca.image ? (
-                              <img
-                                src={ca.image}
-                                width={38}
-                                height={38}
-                                className="rounded-full shrink-0 object-cover"
-                                alt={ca.text}
-                              />
-                            ) : (
-                              <div className="w-[38px] h-[38px] rounded-full shrink-0 bg-primary flex items-center justify-center text-white text-sm font-bold">
-                                {ca.text.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">
-                                {ca.text}
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-white/50 tabular-nums">
-                                {localTime}
-                                <span
-                                  className={`ml-2 font-medium ${
-                                    workingStatus === 'In-Office'
-                                      ? 'text-green-600'
-                                      : 'text-gray-400'
-                                  }`}
-                                >
-                                  · {workingStatus}
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{editingRow['due date']}</p>
                   )}
                 </div>
-
-                {/* Status Update */}
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="status-select">Update Status</Label>
-                  <Select value={editStatus} onValueChange={setEditStatus}>
-                    <SelectTrigger id="status-select" className="w-full">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Completed">Completed</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="edit-priority">Priority</Label>
+                  {isFullEdit ? (
+                    <Select value={editPriority} onValueChange={setEditPriority}>
+                      <SelectTrigger id="edit-priority" className="w-full">
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Low">Low</SelectItem>
+                        <SelectItem value="Medium">Medium</SelectItem>
+                        <SelectItem value="High">High</SelectItem>
+                        <SelectItem value="Critical">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge className={`text-xs rounded-full py-1 px-3 w-fit ${priorityColors[editingRow.priority.toLowerCase()] ?? 'bg-primary text-white'}`}>
+                      {editingRow.priority}
+                    </Badge>
+                  )}
                 </div>
               </div>
-            );
-          })()}
+
+              {/* Current Status (read-only badge) — only shown when has co-assignees */}
+              {!isFullEdit && (
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-white/50 mb-1">Current Status</p>
+                  <Badge className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[editingRow.status.toLowerCase()] ?? 'bg-gray-100 text-gray-700'}`}>
+                    {editingRow.status}
+                  </Badge>
+                </div>
+              )}
+
+              {/* Co-Assignees — only shown when row has co-assignees */}
+              {editingRow.coAssignees.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-white/50 mb-2">Co-Assignees</p>
+                  <div className="flex flex-col gap-2">
+                    {editingRow.coAssignees.map((ca, i) => {
+                      const localTime = computeLocalTime(ca.timezone, popupNow);
+                      const workingStatus = computeWorkingStatus(ca.timezone, popupNow);
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-center gap-3 p-2.5 bg-gray-50 dark:bg-white/5 rounded-lg"
+                        >
+                          {ca.image ? (
+                            <img
+                              src={ca.image}
+                              width={38}
+                              height={38}
+                              className="rounded-full shrink-0 object-cover"
+                              alt={ca.text}
+                            />
+                          ) : (
+                            <div className="w-[38px] h-[38px] rounded-full shrink-0 bg-primary flex items-center justify-center text-white text-sm font-bold">
+                              {ca.text.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">
+                              {ca.text}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-white/50 tabular-nums">
+                              {localTime}
+                              <span
+                                className={`ml-2 font-medium ${
+                                  workingStatus === 'In-Office' ? 'text-green-600' : 'text-gray-400'
+                                }`}
+                              >
+                                · {workingStatus}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Status */}
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="status-select">{isFullEdit ? 'Status' : 'Update Status'}</Label>
+                <Select value={editStatus} onValueChange={setEditStatus}>
+                  <SelectTrigger id="status-select" className="w-full">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
           <DialogFooter className="flex gap-2 mt-4">
             <Button
               className="rounded-md"
               disabled={saving}
               onClick={async () => {
-                if (editRowIndex === null) return;
-                const taskId = internalData[editRowIndex].task_id;
+                if (editRowIndex === null || editingRow === null) return;
+                const taskId = editingRow.task_id;
                 setSaving(true);
                 try {
-                  const res = await fetch(`/api/tasks/${taskId}`, {
+                  // Update task-level fields only when no co-assignees (full edit)
+                  if (isFullEdit) {
+                    const res = await fetch(`/api/tasks/${taskId}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ task_name: editTask, due_date: editDueDate, priority: editPriority }),
+                    });
+                    if (!res.ok) throw new Error('Failed to update task');
+                  }
+
+                  // Always update this user's status individually
+                  const statusRes = await fetch(`/api/task-assignments/${taskId}/users/${userId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: editStatus }),
                   });
-                  if (!res.ok) throw new Error('Failed to update status');
+                  if (!statusRes.ok) throw new Error('Failed to update status');
+
                   setInternalData((prev) => {
                     const updated = [...prev];
-                    updated[editRowIndex] = { ...updated[editRowIndex], status: editStatus };
+                    updated[editRowIndex] = isFullEdit
+                      ? {
+                          ...updated[editRowIndex],
+                          task: editTask,
+                          'due date': editDueDate ? formatDisplayDate(editDueDate) : updated[editRowIndex]['due date'],
+                          rawDueDate: editDueDate,
+                          priority: editPriority,
+                          status: editStatus,
+                        }
+                      : { ...updated[editRowIndex], status: editStatus };
                     return updated;
                   });
+                  onMutation?.();
                   setEditRowIndex(null);
                 } catch {
-                  alert('Failed to update status. Please try again.');
+                  alert('Failed to update task. Please try again.');
                 } finally {
                   setSaving(false);
                 }

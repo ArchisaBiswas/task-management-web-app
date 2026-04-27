@@ -54,6 +54,7 @@ const CreateTaskForm = () => {
           due_date: `${y}-${m}-${d}`,
           priority: priority.charAt(0).toUpperCase() + priority.slice(1),
           status: status.charAt(0).toUpperCase() + status.slice(1),
+          created_by: user.user_id,
         }),
       });
       if (!taskRes.ok) throw new Error('Failed to create task');

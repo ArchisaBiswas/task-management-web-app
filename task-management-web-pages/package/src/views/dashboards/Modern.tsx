@@ -3,11 +3,11 @@ import { Footer } from "src/components/dashboards/modern/Footer";
 import ProfileWelcome from "src/components/dashboards/modern/ProfileWelcome";
 
 import { DataTable } from 'src/components/utilities/table/DataTable';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 
-function getLocalTime(timezone: string): string {
+function getLocalTime(timezone: string, now: Date): string {
     try {
-        return new Date().toLocaleString('en-GB', {
+        return now.toLocaleString('en-GB', {
             timeZone: timezone,
             hour: '2-digit',
             minute: '2-digit',
@@ -18,12 +18,16 @@ function getLocalTime(timezone: string): string {
     }
 }
 
-function getWorkingStatus(timeStr: string): string {
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    if (hours > 9 && hours < 17) return 'In-Office';
-    if (hours === 9 && minutes >= 0) return 'In-Office';
-    if (hours === 17 && minutes === 0) return 'In-Office';
-    return 'Out-of-Office';
+function getWorkingStatus(timezone: string, now: Date): string {
+    try {
+        const hours = parseInt(
+            new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: '2-digit', hour12: false }).format(now),
+            10,
+        ) % 24;
+        return hours >= 9 && hours < 17 ? 'In-Office' : 'Out-of-Office';
+    } catch {
+        return 'Out-of-Office';
+    }
 }
 
 function formatDate(dateStr: string): string {
@@ -31,60 +35,124 @@ function formatDate(dateStr: string): string {
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-function parseDateToISO(dateStr: string): string {
-    const months: Record<string, string> = {
-        january: '01', february: '02', march: '03', april: '04', may: '05', june: '06',
-        july: '07', august: '08', september: '09', october: '10', november: '11', december: '12',
-    };
-    const parts = dateStr.trim().split(/\s+/);
-    const day = (parts[0] ?? '1').padStart(2, '0');
-    const month = months[parts[1]?.toLowerCase()] ?? '01';
-    const year = parts[2] ?? String(new Date().getFullYear());
-    return `${year}-${month}-${day}`;
-}
-
-const calcPriority = (rows: Record<string, unknown>[]) =>
-    rows.filter((r) => ['critical', 'high'].includes(String(r.priority).toLowerCase()) && String(r.status).toLowerCase() !== 'completed').length;
-const calcNonPriority = (rows: Record<string, unknown>[]) =>
-    rows.filter((r) => ['low', 'medium'].includes(String(r.priority).toLowerCase()) && String(r.status).toLowerCase() !== 'completed').length;
+type Stats = {
+    allTasksCount: number;
+    completedCount: number;
+    pendingCount: number;
+    priorityCount: number;
+    nonPriorityCount: number;
+};
 
 const Moderndash = () => {
-    const [data, setData] = useState<any[]>([]);
-    const [taskCount, setTaskCount] = useState(0);
-    const [completedCount, setCompletedCount] = useState(0);
-    const [pendingCount, setPendingCount] = useState(0);
-    const [priorityCount, setPriorityCount] = useState(0);
-    const [nonPriorityCount, setNonPriorityCount] = useState(0);
+    const [rawData, setRawData] = useState<any[]>([]);
+    const [now, setNow] = useState(() => new Date());
+    const [stats, setStats] = useState<Stats>({
+        allTasksCount: 0,
+        completedCount: 0,
+        pendingCount: 0,
+        priorityCount: 0,
+        nonPriorityCount: 0,
+    });
+
+    const fetchStats = useCallback(async () => {
+        try {
+            const res = await fetch('http://localhost:3000/stats');
+            const d = await res.json();
+            setStats({
+                allTasksCount: d.all_tasks,
+                completedCount: d.completed,
+                pendingCount: d.pending,
+                priorityCount: d.priority_tasks,
+                nonPriorityCount: d.non_priority_tasks,
+            });
+        } catch (err) {
+            console.error('Failed to fetch stats:', err);
+        }
+    }, []);
+
+    // Tick every second so local time updates in real-time
+    useEffect(() => {
+        const id = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(id);
+    }, []);
 
     useEffect(() => {
+        fetchStats();
         fetch('http://localhost:3000/assignments')
             .then((res) => res.json())
-            .then((resData) => {
-                const transformed = resData.map((item: any) => {
-                    const localTime = getLocalTime(item.timezone);
-                    const workingStatus = getWorkingStatus(localTime);
-                    return {
-                        task_id: item.task_id,
-                        user_id: item.user_id,
-                        name: item.name,
-                        'working hour status': workingStatus,
-                        'local time': localTime,
-                        task: item.task_name,
-                        'due date': formatDate(item.due_date),
-                        priority: item.priority,
-                        status: item.status,
-                    };
+            .then(async (resData) => {
+                const nowCheck = new Date();
+                const patches: Promise<any>[] = [];
+
+                const enriched = resData.map((item: any) => {
+                    const due = new Date(item.due_date);
+                    const endOfDayGMT = new Date(Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate() + 1));
+                    const overdue = nowCheck >= endOfDayGMT;
+                    const statusLower = (item.status ?? '').toLowerCase();
+                    if (overdue && statusLower !== 'completed' && statusLower !== 'pending') {
+                        patches.push(
+                            fetch(`http://localhost:3000/tasks/${item.task_id}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: 'Pending' }),
+                            })
+                        );
+                        return { ...item, status: 'Pending' };
+                    }
+                    return item;
                 });
-                const rows = transformed as Record<string, unknown>[];
-                setData(transformed);
-                setTaskCount(transformed.length);
-                setCompletedCount(rows.filter((r) => String(r.status).toLowerCase() === 'completed').length);
-                setPendingCount(rows.filter((r) => String(r.status).toLowerCase() === 'pending').length);
-                setPriorityCount(calcPriority(rows));
-                setNonPriorityCount(calcNonPriority(rows));
+
+                if (patches.length) {
+                    await Promise.all(patches);
+                    fetchStats();
+                }
+
+                setRawData(enriched);
             })
             .catch((err) => console.error(err));
-    }, []);
+    }, [fetchStats]);
+
+    // Continuously check for tasks that become overdue while page is open
+    useEffect(() => {
+        if (!rawData.length) return;
+        const overdueIds: number[] = [];
+        const updated = rawData.map((item: any) => {
+            const due = new Date(item.due_date);
+            const endOfDayGMT = new Date(Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate() + 1));
+            const statusLower = (item.status ?? '').toLowerCase();
+            if (now >= endOfDayGMT && statusLower !== 'completed' && statusLower !== 'pending') {
+                overdueIds.push(item.task_id);
+                return { ...item, status: 'Pending' };
+            }
+            return item;
+        });
+        if (!overdueIds.length) return;
+        setRawData(updated);
+        Promise.all(
+            overdueIds.map((id) =>
+                fetch(`http://localhost:3000/tasks/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'Pending' }),
+                }).catch(console.error)
+            )
+        ).then(() => fetchStats());
+    }, [now]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Recompute local time / working status on every tick
+    const data = useMemo(() =>
+        rawData.map((item: any) => ({
+            task_id: item.task_id,
+            user_id: item.user_id,
+            name: item.name,
+            'working hour status': getWorkingStatus(item.timezone, now),
+            'local time': getLocalTime(item.timezone, now),
+            task: item.task_name,
+            'due date': formatDate(item.due_date),
+            priority: item.priority,
+            status: item.status,
+        })),
+    [rawData, now]);
 
     return (
         <>
@@ -93,58 +161,27 @@ const Moderndash = () => {
                     <ProfileWelcome />
                 </div>
                 <div className="col-span-12">
-                    <TopCards allTasksCount={taskCount} completedCount={completedCount} pendingCount={pendingCount} priorityCount={priorityCount} nonPriorityCount={nonPriorityCount} />
-                </div>
-                {/* <div className="lg:col-span-8 col-span-12 flex">
-                    <RevenueUpdate />
-                </div> */}
-                {/* <div className="lg:col-span-4 col-span-12 ">
-                    <YearlyBreakup />
-                    <MonthlyEarning />
-                </div> */}
-                {/* <div className="lg:col-span-4 col-span-12">
-                    <RecentTransaction />
-                </div> */}
-                <div className="col-span-12 flex">
-                    {/* <ProductPerformance /> */}
-                    <div className="flex gap-6 flex-col w-full min-w-0">
-                    <DataTable
-                        data={data}
-                        hiddenColumns={['task_id', 'user_id']}
-                        onDataChange={(d) => {
-                            const rows = d as Record<string, unknown>[];
-                            setTaskCount(d.length);
-                            setCompletedCount(rows.filter((r) => String(r.status).toLowerCase() === 'completed').length);
-                            setPendingCount(rows.filter((r) => String(r.status).toLowerCase() === 'pending').length);
-                            setPriorityCount(calcPriority(rows));
-                            setNonPriorityCount(calcNonPriority(rows));
-                        }}
-                        onRowSave={(row) => {
-                            const r = row as Record<string, unknown>;
-                            const payload = {
-                                task_name: r.task,
-                                due_date: parseDateToISO(String(r['due date'])),
-                                priority: r.priority,
-                                status: r.status,
-                            };
-                            console.log('onRowSave fired — task_id:', r.task_id, 'payload:', payload);
-                            fetch(`http://localhost:3000/tasks/${r.task_id}`, {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(payload),
-                            })
-                                .then((res) => res.json())
-                                .then((data) => console.log('Save response:', data))
-                                .catch((err) => console.error('Failed to save task:', err));
-                        }}
+                    <TopCards
+                        allTasksCount={stats.allTasksCount}
+                        completedCount={stats.completedCount}
+                        pendingCount={stats.pendingCount}
+                        priorityCount={stats.priorityCount}
+                        nonPriorityCount={stats.nonPriorityCount}
                     />
+                </div>
+                <div className="col-span-12 flex">
+                    <div className="flex gap-6 flex-col w-full min-w-0">
+                        <DataTable
+                            data={data}
+                            hiddenColumns={['task_id', 'user_id']}
+                            onMutation={fetchStats}
+                        />
                     </div>
                 </div>
                 <div className="col-span-12">
                     <Footer />
                 </div>
             </div>
-
         </>
     );
 };
