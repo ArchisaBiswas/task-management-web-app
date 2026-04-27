@@ -226,7 +226,7 @@ const UpdateMyTaskForm = () => {
         {loading ? (
           <p className="mt-6 text-center text-sm text-gray-500 dark:text-white/50">Loading tasks…</p>
         ) : tasks.length === 0 ? (
-          <p className="mt-6 text-center text-sm text-gray-500 dark:text-white/50">No tasks assigned to you.</p>
+          <p className="mt-6 text-center text-sm text-gray-500 dark:text-white/50">No tasks assigned to you yet.</p>
         ) : (
           <div className="mt-6 flex flex-col gap-6">
 

@@ -8,7 +8,7 @@ const AuthForgotPassword = () => {
       <form className="mt-6">
         <div className="mb-4">
           <div className="mb-2 block">
-            <Label htmlFor="emadd">Email Address</Label>
+            <Label htmlFor="emadd">E-Mail Address</Label>
           </div>
           <Input id="emadd" type="text" />
         </div>

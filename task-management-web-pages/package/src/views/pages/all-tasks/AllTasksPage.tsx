@@ -204,7 +204,7 @@ const AllTasksPage = () => {
           )}
           {!loading && !error && rows.length === 0 && (
             <div className="text-center py-16 text-gray-500 dark:text-white/50 text-sm">
-              No tasks assigned to you.
+              No tasks assigned to you yet.
             </div>
           )}
           {!loading && !error && rows.length > 0 && (

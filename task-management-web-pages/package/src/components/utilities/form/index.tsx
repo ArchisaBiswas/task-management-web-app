@@ -54,6 +54,7 @@ const Form = () => {
   const [assigneesOpen, setAssigneesOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
     fetch('/api/users')
@@ -69,8 +70,17 @@ const Form = () => {
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
     );
 
+  const errors = attempted ? {
+    taskName: !taskName.trim() ? 'Task Name is required' : '',
+    assignees: selectedAssigneeIds.length === 0 ? 'Please select at least one assignee' : '',
+    date: !date ? 'Due Date is required' : '',
+    priority: !priority ? 'Priority is required' : '',
+    status: !status ? 'Status is required' : '',
+  } : { taskName: '', assignees: '', date: '', priority: '', status: '' };
+
   const handleCreate = async () => {
-    if (!taskName.trim() || !date || !priority || !status) return;
+    setAttempted(true);
+    if (!taskName.trim() || !date || !priority || !status || selectedAssigneeIds.length === 0) return;
     setSubmitting(true);
     try {
       const y = date.getFullYear();
@@ -105,6 +115,7 @@ const Form = () => {
       setPriority('');
       setStatus('');
       setSelectedAssigneeIds([]);
+      setAttempted(false);
       setSubmitted(true);
       setTimeout(() => setSubmitted(false), 3000);
     } catch (err) {
@@ -123,26 +134,26 @@ const Form = () => {
 
           {/* Task Name */}
           <div>
-            <Label htmlFor="task">Task</Label>
+            <Label htmlFor="task">Task <span className="text-red-500">*</span></Label>
             <Input
               id="task"
               type="text"
               placeholder="Enter task name"
               value={taskName}
               onChange={(e) => setTaskName(e.target.value)}
-              required
-              className="mt-2 border-primary placeholder:text-primary"
+              className={`mt-2 border-primary placeholder:text-primary ${errors.taskName ? 'border-red-500' : ''}`}
             />
+            {errors.taskName && <p className="text-xs text-red-500 mt-1">{errors.taskName}</p>}
           </div>
 
           {/* Assignees */}
           <div>
-            <Label>Assignees</Label>
+            <Label>Assignees <span className="text-red-500">*</span></Label>
             <Popover open={assigneesOpen} onOpenChange={setAssigneesOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="mt-2 w-full justify-between font-normal hover:bg-transparent focus:border-primary"
+                  className={`mt-2 w-full justify-between font-normal hover:bg-transparent focus:border-primary ${errors.assignees ? 'border-red-500' : ''}`}
                 >
                   <span className="truncate text-left">
                     {selectedAssigneeIds.length > 0
@@ -191,17 +202,18 @@ const Form = () => {
                 )}
               </PopoverContent>
             </Popover>
+            {errors.assignees && <p className="text-xs text-red-500 mt-1">{errors.assignees}</p>}
           </div>
 
           {/* Due Date */}
-          <div className="flex flex-col gap-3">
-            <Label htmlFor="date" className="px-1">Due Date</Label>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="date" className="px-1">Due Date <span className="text-red-500">*</span></Label>
             <Popover open={open} onOpenChange={setOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   id="date"
-                  className="w-full justify-between font-normal hover:bg-transparent focus:border-primary"
+                  className={`w-full justify-between font-normal hover:bg-transparent focus:border-primary ${errors.date ? 'border-red-500' : ''}`}
                 >
                   {date ? date.toLocaleDateString() : 'Select date'}
                   <Icon icon="solar:calendar-minimalistic-linear" width={18} height={18} />
@@ -220,15 +232,16 @@ const Form = () => {
                 />
               </PopoverContent>
             </Popover>
+            {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
           </div>
 
           {/* Priority */}
           <div>
-            <Label htmlFor="priority">Priority</Label>
+            <Label htmlFor="priority">Priority <span className="text-red-500">*</span></Label>
             <Select value={priority} onValueChange={setPriority}>
               <SelectTrigger
                 id="priority"
-                className={`mt-2 w-full transition-colors ${priority ? priorityConfig[priority].triggerCls : 'border-primary data-[placeholder]:text-primary'}`}
+                className={`mt-2 w-full transition-colors ${priority ? priorityConfig[priority].triggerCls : `border-primary data-[placeholder]:text-primary ${errors.priority ? 'border-red-500' : ''}`}`}
               >
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>
@@ -243,15 +256,16 @@ const Form = () => {
                 ))}
               </SelectContent>
             </Select>
+            {errors.priority && <p className="text-xs text-red-500 mt-1">{errors.priority}</p>}
           </div>
 
           {/* Status */}
           <div>
-            <Label htmlFor="status">Status</Label>
+            <Label htmlFor="status">Status <span className="text-red-500">*</span></Label>
             <Select value={status} onValueChange={setStatus}>
               <SelectTrigger
                 id="status"
-                className={`mt-2 w-full transition-colors ${status ? statusConfig[status].triggerCls : 'border-primary data-[placeholder]:text-primary'}`}
+                className={`mt-2 w-full transition-colors ${status ? statusConfig[status].triggerCls : `border-primary data-[placeholder]:text-primary ${errors.status ? 'border-red-500' : ''}`}`}
               >
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
@@ -266,6 +280,7 @@ const Form = () => {
                 ))}
               </SelectContent>
             </Select>
+            {errors.status && <p className="text-xs text-red-500 mt-1">{errors.status}</p>}
           </div>
 
           {/* Submit */}
@@ -276,7 +291,7 @@ const Form = () => {
             <Button
               className="rounded-md whitespace-nowrap"
               onClick={handleCreate}
-              disabled={!taskName.trim() || !date || !priority || !status || submitting}
+              disabled={submitting}
             >
               {submitting ? 'Creating…' : 'Create Task'}
             </Button>

@@ -39,18 +39,48 @@ const timezones = [
   "Pacific/Auckland",
 ];
 
+const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
 const AuthRegister = () => {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [timezone, setTimezone] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [touched, setTouched] = useState({
+    name: false,
+    email: false,
+    password: false,
+    confirmPassword: false,
+    timezone: false,
+  });
+
+  const touch = (field: keyof typeof touched) =>
+    setTouched((prev) => ({ ...prev, [field]: true }));
+
+  const nameError = touched.name && !name.trim() ? 'Name is required' : '';
+  const emailError =
+    touched.email && (!email.trim() ? 'E-Mail is required' : !isValidEmail(email) ? 'Please enter a valid E-Mail Address' : '');
+  const passwordError =
+    touched.password && (!password ? 'Password is required' : password.length < 8 ? 'Password must be at least 8 characters' : '');
+  const confirmPasswordError =
+    touched.confirmPassword && (!confirmPassword ? 'Please confirm your password' : confirmPassword !== password ? 'Passwords do not match' : '');
+  const timezoneError = touched.timezone && !timezone ? 'Please select a timezone' : '';
+
+  const isFormValid =
+    name.trim() &&
+    isValidEmail(email) &&
+    password.length >= 8 &&
+    confirmPassword === password &&
+    timezone;
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !password || !timezone) return;
+    setTouched({ name: true, email: true, password: true, confirmPassword: true, timezone: true });
+    if (!isFormValid) return;
     setLoading(true);
     setError("");
     try {
@@ -73,7 +103,7 @@ const AuthRegister = () => {
   };
 
   return (
-    <form className="mt-6" onSubmit={handleRegister}>
+    <form className="mt-6" onSubmit={handleRegister} noValidate>
       <div className="mb-4">
         <div className="mb-2 block">
           <Label htmlFor="name" className="font-semibold">Name</Label>
@@ -84,21 +114,25 @@ const AuthRegister = () => {
           placeholder="Enter your name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          required
+          onBlur={() => touch('name')}
+          className={nameError ? 'border-red-500 focus-visible:ring-red-500' : ''}
         />
+        {nameError && <p className="text-xs text-red-500 mt-1">{nameError}</p>}
       </div>
       <div className="mb-4">
         <div className="mb-2 block">
-          <Label htmlFor="emadd" className="font-semibold">Email Address</Label>
+          <Label htmlFor="emadd" className="font-semibold">E-Mail Address</Label>
         </div>
         <Input
           id="emadd"
           type="email"
-          placeholder="Enter your email"
+          placeholder="Enter your E-Mail"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          required
+          onBlur={() => touch('email')}
+          className={emailError ? 'border-red-500 focus-visible:ring-red-500' : ''}
         />
+        {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
       </div>
       <div className="mb-4">
         <div className="mb-2 block">
@@ -107,18 +141,45 @@ const AuthRegister = () => {
         <Input
           id="userpwd"
           type="password"
-          placeholder="Enter your password"
+          placeholder="Enter your password (min. 8 characters)"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
+          onChange={(e) => {
+            setPassword(e.target.value);
+            if (touched.confirmPassword) touch('confirmPassword');
+          }}
+          onBlur={() => touch('password')}
+          className={passwordError ? 'border-red-500 focus-visible:ring-red-500' : ''}
         />
+        {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
+      </div>
+      <div className="mb-4">
+        <div className="mb-2 block">
+          <Label htmlFor="confirmpwd" className="font-semibold">Confirm Password</Label>
+        </div>
+        <Input
+          id="confirmpwd"
+          type="password"
+          placeholder="Re-enter your password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          onBlur={() => touch('confirmPassword')}
+          className={confirmPasswordError ? 'border-red-500 focus-visible:ring-red-500' : ''}
+        />
+        {confirmPasswordError && <p className="text-xs text-red-500 mt-1">{confirmPasswordError}</p>}
       </div>
       <div className="mb-6">
         <div className="mb-2 block">
           <Label htmlFor="timezone" className="font-semibold">Time Zone</Label>
         </div>
-        <Select value={timezone} onValueChange={setTimezone}>
-          <SelectTrigger id="timezone" className="w-full">
+        <Select
+          value={timezone}
+          onValueChange={(val) => { setTimezone(val); touch('timezone'); }}
+        >
+          <SelectTrigger
+            id="timezone"
+            className={`w-full ${timezoneError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+            onBlur={() => touch('timezone')}
+          >
             <SelectValue placeholder="Select your time zone" />
           </SelectTrigger>
           <SelectContent className="max-h-60">
@@ -127,12 +188,13 @@ const AuthRegister = () => {
             ))}
           </SelectContent>
         </Select>
+        {timezoneError && <p className="text-xs text-red-500 mt-1">{timezoneError}</p>}
       </div>
       {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
       <Button
         className="w-full"
         type="submit"
-        disabled={loading || !name.trim() || !email.trim() || !password || !timezone}
+        disabled={loading}
       >
         {loading ? "Registering…" : "Register"}
       </Button>
