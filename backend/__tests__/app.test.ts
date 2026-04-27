@@ -1,5 +1,10 @@
 import request from "supertest";
 
+beforeAll(() => {
+  jest.spyOn(console, "error").mockImplementation(() => {});
+  jest.spyOn(console, "warn").mockImplementation(() => {});
+});
+
 // ── Mocks must be declared before any imports that trigger app.ts ──
 jest.mock("../db", () => ({
   db: { query: jest.fn() },

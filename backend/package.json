@@ -9,16 +9,6 @@
     "dev": "ts-node app.ts",
     "test": "jest --runInBand --forceExit"
   },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/__tests__/**/*.test.ts"
-    ],
-    "moduleNameMapper": {
-      "^dotenv/config$": "<rootDir>/__mocks__/dotenv.ts"
-    }
-  },
   "author": "",
   "license": "ISC",
   "dependencies": {
