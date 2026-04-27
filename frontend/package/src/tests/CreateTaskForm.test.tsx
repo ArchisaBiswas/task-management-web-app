@@ -75,21 +75,41 @@ describe('CreateTaskForm', () => {
   });
 
   it('shows alert on API failure', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({ ok: false });
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+  global.fetch = vi.fn().mockResolvedValueOnce({ ok: false });
 
-    renderForm();
+  window.alert = vi.fn();
+  const alertSpy = vi.spyOn(window, 'alert');
 
-    // Force-set internal state by triggering submit after filling text field only
-    fireEvent.change(screen.getByPlaceholderText(/enter task name/i), { target: { value: 'Task' } });
-    // Even though date/priority/status are missing, let's confirm the guard stops the fetch
-    fireEvent.click(screen.getByRole('button', { name: /create task/i }));
+  renderForm();
 
-    // Because validation guard kicks in (no date/priority/status), fetch should NOT be called
-    await waitFor(() => {
-      expect(global.fetch).not.toHaveBeenCalled();
-    });
+  // Fill ALL required fields
+  fireEvent.change(screen.getByPlaceholderText(/enter task name/i), {
+    target: { value: 'Task' },
+  });
 
-    alertSpy.mockRestore();
+  fireEvent.change(screen.getByLabelText(/due date/i), {
+    target: { value: '2026-05-01' },
+  });
+
+  fireEvent.change(screen.getByLabelText(/priority/i), {
+    target: { value: 'High' },
+  });
+
+  fireEvent.change(screen.getByLabelText(/status/i), {
+    target: { value: 'Active' },
+  });
+
+  // Submit
+  fireEvent.click(screen.getByRole('button', { name: /create task/i }));
+
+  // Now fetch to be called
+  await waitFor(() => {
+    expect(global.fetch).toHaveBeenCalled();
+  });
+
+  // And alert should be triggered
+  expect(alertSpy).toHaveBeenCalled();
+
+  alertSpy.mockRestore();
   });
 });
