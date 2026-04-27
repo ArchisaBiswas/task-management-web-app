@@ -463,7 +463,7 @@ export const DataTable = <T extends Record<string, unknown>>({
                 try {
                   // Remove this user's assignment. The backend then checks whether
                   // any other assignees remain; if none do, it also deletes the task.
-                  const res = await fetch("http://localhost:3000/task-assignments", {
+                  const res = await fetch("/api/task-assignments", {
                     method: "DELETE",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ task_id: taskId, user_id: userId }),
@@ -767,7 +767,7 @@ export const DataTable = <T extends Record<string, unknown>>({
                   priority: editValues.priority ?? row.priority,
                 };
                 const taskRes = await fetch(
-                  `http://localhost:3000/tasks/${row.task_id}`,
+                  `/api/tasks/${row.task_id}`,
                   { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(taskPayload) }
                 );
                 if (!taskRes.ok) throw new Error("Task update failed");
@@ -775,7 +775,7 @@ export const DataTable = <T extends Record<string, unknown>>({
                 // Update this assignee's status individually
                 if (editValues.status !== undefined) {
                   const statusRes = await fetch(
-                    `http://localhost:3000/task-assignments/${row.task_id}/users/${row.user_id}`,
+                    `/api/task-assignments/${row.task_id}/users/${row.user_id}`,
                     { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: editValues.status }) }
                   );
                   if (!statusRes.ok) throw new Error("Status update failed");

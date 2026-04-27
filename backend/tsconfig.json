@@ -7,6 +7,8 @@
     "esModuleInterop": true,
     "strict": true,
     "skipLibCheck": true,
-    "types": ["node", "jest"]
-  }
+    "types": ["node"],
+    "outDir": "dist"
+  },
+  "exclude": ["node_modules", "dist", "__tests__", "__mocks__"]
 }

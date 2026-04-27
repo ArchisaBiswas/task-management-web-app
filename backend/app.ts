@@ -489,8 +489,23 @@ app.post("/register", async (req, res) => {
 
 export default app;
 
+// Retries a DB ping on startup to bridge the gap between MySQL accepting TCP
+// connections and actually being ready to authenticate — common in Docker compose.
+async function waitForDb(retries = 10, delayMs = 3000): Promise<void> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await db.query('SELECT 1');
+      return;
+    } catch {
+      console.warn(`DB not ready (attempt ${attempt}/${retries}), retrying in ${delayMs}ms…`);
+      if (attempt < retries) await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  throw new Error('Could not connect to the database after multiple retries');
+}
+
 if (process.env.NODE_ENV !== "test") {
-  app.listen(3000, () => {
-    console.log("Server running on port 3000");
-  });
+  waitForDb()
+    .then(() => app.listen(3000, () => console.log("Server running on port 3000")))
+    .catch(err => { console.error("Startup failed:", err); process.exit(1); });
 }

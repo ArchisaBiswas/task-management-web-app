@@ -4,7 +4,10 @@
   "description": "Backend for TaskMent",
   "main": "index.js",
   "scripts": {
-    "test": "jest --runInBand --forceExit"
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "dev":   "ts-node app.ts",
+    "test":  "jest --runInBand --forceExit"
   },
   "jest": {
     "preset": "ts-jest",

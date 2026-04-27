@@ -2,6 +2,7 @@
 node_modules/
 
 # Env files (VERY IMPORTANT)
+.env
 backend/.env
 
 # Logs

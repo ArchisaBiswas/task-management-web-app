@@ -62,7 +62,7 @@ const Moderndash = () => {
     // Fetches global task statistics and updates the stat card state.
     const fetchStats = useCallback(async () => {
         try {
-            const res = await fetch('http://localhost:3000/stats');
+            const res = await fetch('/api/stats');
             const d = await res.json();
             setStats({
                 allTasksCount: d.all_tasks,
@@ -84,7 +84,7 @@ const Moderndash = () => {
 
     useEffect(() => {
         fetchStats();
-        fetch('http://localhost:3000/assignments')
+        fetch('/api/assignments')
             .then((res) => res.json())
             .then(async (resData) => {
                 const nowCheck = new Date();
@@ -97,7 +97,7 @@ const Moderndash = () => {
                     const statusLower = (item.status ?? '').toLowerCase();
                     if (overdue && statusLower !== 'completed' && statusLower !== 'pending') {
                         patches.push(
-                            fetch(`http://localhost:3000/tasks/${item.task_id}`, {
+                            fetch(`/api/tasks/${item.task_id}`, {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ status: 'Pending' }),
@@ -136,7 +136,7 @@ const Moderndash = () => {
         setRawData(updated);
         Promise.all(
             overdueIds.map((id) =>
-                fetch(`http://localhost:3000/tasks/${id}`, {
+                fetch(`/api/tasks/${id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: 'Pending' }),

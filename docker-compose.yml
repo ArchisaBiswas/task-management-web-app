@@ -1,0 +1,56 @@
+services:
+
+  # ── MySQL 8 ────────────────────────────────────────────────────────────────
+  db:
+    image: mysql:8
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE:      ${DB_NAME}
+      MYSQL_USER:          ${DB_USER}
+      MYSQL_PASSWORD:      ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test:         ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval:     10s
+      timeout:      5s
+      retries:      5
+      start_period: 30s
+
+  # ── Express API ────────────────────────────────────────────────────────────
+  # Not exposed to the host; only Nginx (frontend) reaches it on the internal network.
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DB_HOST:        db
+      DB_USER:        ${DB_USER}
+      DB_PASSWORD:    ${DB_PASSWORD}
+      DB_NAME:        ${DB_NAME}
+      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
+      AWS_SECRET_KEY: ${AWS_SECRET_KEY}
+      AWS_REGION:     ${AWS_REGION}
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL}
+      GROQ_API_KEY:   ${GROQ_API_KEY}
+    expose:
+      - "3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── React / Vite (Nginx) ───────────────────────────────────────────────────
+  # Nginx serves the built SPA and proxies /api/ to the backend container.
+  frontend:
+    build:
+      context: ./frontend/package
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:

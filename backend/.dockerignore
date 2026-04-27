@@ -1,0 +1,5 @@
+node_modules
+dist
+.env
+__tests__
+__mocks__
