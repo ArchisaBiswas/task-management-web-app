@@ -2,7 +2,7 @@ import Form from "src/components/utilities/form";
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 
 const BCrumb = [
-  { to: '/', title: 'Home' },
+  { to: '/dashboard', title: 'Home' },
   { title: 'Create Task' },
 ];
 

@@ -42,7 +42,7 @@ const AuthLogin = () => {
       }
       const userData = await res.json();
       login(userData);
-      navigate(userData.role === 'admin' ? '/' : '/all-tasks');
+      navigate(userData.role === 'admin' ? '/dashboard' : '/all-tasks');
     } catch {
       setError('Login failed. Please try again.');
     } finally {

@@ -40,15 +40,13 @@ const Error = Loadable(lazy(() => import('../views/authentication/Error')));
 // // icons
 const SolarIcon = Loadable(lazy(() => import('../views/icons/SolarIcon')));
 
-// const SamplePage = lazy(() => import('../views/sample-page/SamplePage'));
-
 const Router = [
   {
     path: '/',
     element: <FullLayout />,
     children: [
-      { path: '/', exact: true, element: <Modern /> },
-      // { path: '/', exact: true, element: <SamplePage /> },
+      { path: '/', exact: true, element: <Navigate to="/auth/auth2/login" replace /> },
+      { path: '/dashboard', exact: true, element: <Modern /> },
       { path: '*', element: <Navigate to="/auth/404" /> },
 
       { path: '/apps/notes', element: <Notes /> },

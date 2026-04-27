@@ -118,7 +118,7 @@ const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
     >
       {/* Logo */}
       <div className="px-6 flex items-center brand-logo overflow-hidden">
-        <AMLogo component={Link} href="/" img="">
+        <AMLogo component={Link} href="/dashboard" img="">
           <FullLogo />
         </AMLogo>
       </div>

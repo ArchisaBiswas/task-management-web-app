@@ -307,21 +307,23 @@ app.post("/task-assignments", async (req, res) => {
         [task_id]
       ) as any[];
 
-      const [emailRows] = await db.query(
-        `SELECT u.email FROM users u
+      const [assigneeRows] = await db.query(
+        `SELECT u.name, u.email FROM users u
          JOIN task_assignments ta ON u.user_id = ta.user_id
          WHERE ta.task_id = ? AND u.email IS NOT NULL`,
         [task_id]
       ) as any[];
 
-      const emails = (emailRows as any[]).map((r: any) => r.email as string).filter(Boolean);
+      const assignees = assigneeRows as any[];
+      const emails = assignees.map((r: any) => r.email as string).filter(Boolean);
 
       if (emails.length && (taskRows as any[]).length) {
         const task = (taskRows as any[])[0];
-        const subject = `[TaskMent] New Task Assigned — ${task.task_name}`;
+        const subject = `[TaskMent] New Task Assigned: ${task.task_name}`;
         const due = new Date(task.due_date).toLocaleDateString("en-GB", {
           day: "numeric", month: "long", year: "numeric",
         });
+        const assigneeNames = assignees.map((r: any) => r.name as string).filter(Boolean).join(", ");
         const row = (label: string, value: string) =>
           `<tr>
             <td style="padding:6px 16px 6px 0;color:#6b7280;font-weight:600;white-space:nowrap;vertical-align:top;">${label}</td>
@@ -330,16 +332,17 @@ app.post("/task-assignments", async (req, res) => {
           </tr>`;
         const html =
           `<div style="font-family:Arial,sans-serif;font-size:14px;color:#111827;max-width:560px;margin:0 auto;">
-            <p style="margin:0 0 16px;">Dear Team Member,</p>
-            <p style="margin:0 0 20px;">You have been assigned a new task. Please find the details below:</p>
+            <p style="margin:0 0 16px;">Hi Team Member,</p>
+            <p style="margin:0 0 20px;">You have been assigned a new Task. Please find the details below:</p>
             <table style="border-collapse:collapse;">
               ${row("Task", task.task_name)}
               ${row("Due Date", due)}
               ${row("Priority", task.priority)}
               ${row("Status", task.status)}
+              ${row("Assignees", assigneeNames)}
             </table>
             <p style="margin:24px 0 8px;">Kindly log in to TaskMent and ensure this task is completed by the due date.</p>
-            <p style="margin:0;">Thank you.</p>
+            <p style="margin:0 0 8px;">Thank you.</p>
             <p style="margin:0;">Regards,<br><strong>TaskMent</strong></p>
           </div>`;
         await sendTaskAssignmentEmail(emails, subject, html);
