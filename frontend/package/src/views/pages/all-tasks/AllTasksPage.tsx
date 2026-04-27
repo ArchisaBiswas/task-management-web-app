@@ -16,7 +16,7 @@ import userimg8 from 'src/assets/images/profile/user-8.jpg';
 import userimg9 from 'src/assets/images/profile/user-9.jpg';
 import userimg10 from 'src/assets/images/profile/user-10.jpg';
 
-const API = import.meta.env.VITE_API_URL;
+const API = "/api";
 
 const userImages = [
   userimg1, userimg2, userimg3, userimg4, userimg5,

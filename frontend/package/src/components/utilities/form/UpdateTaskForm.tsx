@@ -25,7 +25,7 @@ type DbUser = { user_id: number; name: string; timezone: string };
 type UserOption = DbUser & { officeStatus: 'In-Office' | 'Out-of-Office' };
 type AssignmentRow = { task_id: number; user_id: number };
 
-const API = import.meta.env.VITE_API_URL;
+const API = "/api";
 
 // Returns whether the current local time in the given timezone falls within 09:00–17:00.
 const getOfficeStatus = (timezone: string): 'In-Office' | 'Out-of-Office' => {

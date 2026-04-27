@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "src/components/ui/select";
 
-const API = import.meta.env.VITE_API_URL;
+const API = "/api";
 
 const timezones = [
   "Pacific/Midway",

@@ -14,7 +14,7 @@ import {
 } from 'src/components/ui/select';
 import { useAuth } from 'src/context/AuthContext';
 
-const API = import.meta.env.VITE_API_URL;
+const API = "/api";
 
 const priorityConfig: Record<string, { triggerCls: string; dotCls: string }> = {
   low:      { triggerCls: 'bg-primary      text-white border-primary',    dotCls: 'bg-primary' },

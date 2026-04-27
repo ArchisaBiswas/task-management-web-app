@@ -5,7 +5,7 @@ import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
 import { useAuth } from 'src/context/AuthContext';
 
-const API = import.meta.env.VITE_API_URL;
+const API = "/api";
 
 // Basic format check — trims whitespace before testing to avoid false negatives from copy-paste.
 const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());

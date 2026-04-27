@@ -10,7 +10,7 @@ import { Input } from "src/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "src/components/ui/select";
 import { useAuth, AuthUser } from "src/context/AuthContext";
 
-const API = import.meta.env.VITE_API_URL;
+const API = "/api";
 
 const TIMEZONES = [
   'Pacific/Midway','Pacific/Honolulu','America/Anchorage','America/Los_Angeles',

@@ -56,7 +56,7 @@ export type EmployeeRow = {
   all_completed?: boolean;
 };
 
-const API = import.meta.env.VITE_API_URL;
+const API = "/api";
 
 const priorityColors: Record<string, string> = {
   low: 'bg-primary text-white',

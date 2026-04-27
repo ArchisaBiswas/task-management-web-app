@@ -17,7 +17,7 @@ import {
 type DbUser = { user_id: number; name: string; timezone: string };
 type UserOption = DbUser & { officeStatus: 'In-Office' | 'Out-of-Office' };
 
-const API = import.meta.env.VITE_API_URL;
+const API = "/api";
 
 const getOfficeStatus = (timezone: string): 'In-Office' | 'Out-of-Office' => {
   const hour =

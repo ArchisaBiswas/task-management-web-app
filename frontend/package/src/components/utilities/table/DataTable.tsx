@@ -42,7 +42,7 @@ import { Calendar } from 'src/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 import CardBox from '../../shared/CardBox';
 
-const API = import.meta.env.VITE_API_URL;
+const API = "/api";
 
 const badgeColors = [
   'bg-blue-100 text-blue-700',

@@ -5,7 +5,7 @@ import ProfileWelcome from "src/components/dashboards/modern/ProfileWelcome";
 import { DataTable } from 'src/components/utilities/table/DataTable';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
-const API = import.meta.env.VITE_API_URL;
+const API = "/api";
 
 // Formats the current time in a given IANA timezone as HH:MM; falls back to 'Invalid TZ' on error.
 function getLocalTime(timezone: string, now: Date): string {
