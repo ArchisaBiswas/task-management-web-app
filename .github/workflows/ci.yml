@@ -34,16 +34,24 @@ jobs:
         working-directory: backend
         run: npm run build || echo "No backend build step"
 
+      - name: Run backend tests
+        working-directory: backend
+        run: npm test
+
       # =========================
       # FRONTEND
       # =========================
       - name: Install frontend dependencies
-        working-directory: task-management-web-pages/package
+        working-directory: frontend/package
         run: npm install
 
       - name: Build frontend
-        working-directory: task-management-web-pages/package
+        working-directory: frontend/package
         run: npm run build
+
+      - name: Run frontend tests
+        working-directory: frontend/package
+        run: npm test
 
       - name: Done
         run: echo "CI completed successfully 🚀"

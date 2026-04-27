@@ -9,7 +9,7 @@ const ses = new SESClient({
   },
 });
 
-// Send email function
+// Sends a plain-text email to a single recipient via AWS SES.
 export const sendEmail = async (
   to: string,
   subject: string,
@@ -44,6 +44,7 @@ export const sendEmail = async (
   }
 };
 
+// Sends an HTML-formatted task assignment notification to all listed recipients using AWS SES via API.
 export const sendTaskAssignmentEmail = async (
   toEmails: string[],
   subject: string,

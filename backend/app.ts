@@ -6,6 +6,9 @@ import { sendTaskAssignmentEmail } from "./ses-email";
 
 const app = express();
 app.use(express.json());
+
+// Allows the React dev server (different port) and any other origin to call this API.
+// OPTIONS pre-flight is answered with 204 so browsers don't block PATCH/DELETE.
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header(
@@ -20,7 +23,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 👇 ADD THIS ROUTE
+// Returns every task assignment joined with user and task details, ordered by user then due date.
 app.get("/assignments", async (_req, res) => {
   try {
     const query = `
@@ -48,6 +51,7 @@ app.get("/assignments", async (_req, res) => {
 }
 });
 
+// Deletes a task and all its assignments; assignments must be removed first to respect the FK constraint.
 app.delete("/tasks/:taskId", async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -60,6 +64,8 @@ app.delete("/tasks/:taskId", async (req, res) => {
   }
 });
 
+// Returns all tasks assigned to the given user, each enriched with co-assignees and a
+// boolean indicating whether every assignee has completed the task.
 app.get("/my-tasks/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -118,6 +124,8 @@ app.get("/my-tasks/:userId", async (req, res) => {
   }
 });
 
+// Partially updates a task's fields. Task-level fields (name, due date, priority) are written
+// to the tasks table; status is written per-assignee to task_assignments, skipping completed rows.
 app.patch("/tasks/:taskId", async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -154,7 +162,7 @@ app.patch("/tasks/:taskId", async (req, res) => {
   }
 });
 
-// Update a single assignee's status for a task
+// Updates only the requesting user's own status for a task, leaving other assignees' statuses untouched.
 app.patch("/task-assignments/:taskId/users/:userId", async (req, res) => {
   try {
     const { taskId, userId } = req.params;
@@ -174,7 +182,7 @@ app.patch("/task-assignments/:taskId/users/:userId", async (req, res) => {
   }
 });
 
-// Stat card counts for all tasks
+// Returns aggregate task counts (all, completed, pending, high-priority, non-priority) across all users.
 app.get("/stats", async (_req, res) => {
   try {
     const [[row]] = await db.query(`
@@ -210,31 +218,30 @@ app.get("/stats", async (_req, res) => {
   }
 });
 
-// Stat card counts for tasks assigned to a specific user
+// Returns stat card counts based solely on this user's own assignment status —
+// no cross-assignee checks so numbers reflect only what this user has personally done.
 app.get("/stats/user/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
     const [[row]] = await db.query(`
       SELECT
-        (SELECT COUNT(DISTINCT ta.task_id) FROM task_assignments ta WHERE ta.user_id = ?) AS all_tasks,
+        (SELECT COUNT(*) FROM task_assignments ta
+         WHERE ta.user_id = ?) AS all_tasks,
+
+        (SELECT COUNT(*) FROM task_assignments ta
+         WHERE ta.user_id = ? AND ta.status = 'Completed') AS completed,
+
+        (SELECT COUNT(*) FROM task_assignments ta
+         WHERE ta.user_id = ? AND ta.status = 'Pending') AS pending,
+
         (SELECT COUNT(*) FROM tasks t
-         JOIN task_assignments ta_u ON ta_u.task_id = t.task_id AND ta_u.user_id = ?
-         WHERE (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') = 0
-        ) AS completed,
-        (SELECT COUNT(*) FROM tasks t
-         JOIN task_assignments ta_u ON ta_u.task_id = t.task_id AND ta_u.user_id = ?
-         WHERE (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status = 'Pending') > 0
-           AND (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') > 0
-        ) AS pending,
-        (SELECT COUNT(*) FROM tasks t
-         JOIN task_assignments ta_u ON ta_u.task_id = t.task_id AND ta_u.user_id = ?
-         WHERE t.priority IN ('High', 'Critical')
-           AND (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') > 0
+         JOIN task_assignments ta ON ta.task_id = t.task_id AND ta.user_id = ?
+         WHERE t.priority IN ('High', 'Critical') AND ta.status != 'Completed'
         ) AS priority_tasks,
+
         (SELECT COUNT(*) FROM tasks t
-         JOIN task_assignments ta_u ON ta_u.task_id = t.task_id AND ta_u.user_id = ?
-         WHERE t.priority IN ('Low', 'Medium')
-           AND (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id AND ta.status != 'Completed') > 0
+         JOIN task_assignments ta ON ta.task_id = t.task_id AND ta.user_id = ?
+         WHERE t.priority IN ('Low', 'Medium') AND ta.status != 'Completed'
         ) AS non_priority_tasks
     `, [userId, userId, userId, userId, userId]) as any[];
     res.json({
@@ -250,6 +257,7 @@ app.get("/stats/user/:userId", async (req, res) => {
   }
 });
 
+// Returns a flat list of all tasks ordered by creation, used by admin dropdowns.
 app.get("/tasks", async (_req, res) => {
   try {
     const [rows] = await db.query(
@@ -262,6 +270,7 @@ app.get("/tasks", async (_req, res) => {
   }
 });
 
+// Returns all registered users with their timezone, used to populate assignee pickers.
 app.get("/users", async (_req, res) => {
   try {
     const [rows] = await db.query("SELECT user_id, name, timezone FROM users ORDER BY user_id");
@@ -272,6 +281,7 @@ app.get("/users", async (_req, res) => {
   }
 });
 
+// Creates a new task record and returns the generated task_id for subsequent assignment calls.
 app.post("/tasks", async (req, res) => {
   try {
     const { task_name, due_date, priority, status, created_by } = req.body;
@@ -289,6 +299,8 @@ app.post("/tasks", async (req, res) => {
   }
 });
 
+// Assigns a user to a task and fires an email notification to all current assignees.
+// Email errors are caught and logged without failing the HTTP response.
 app.post("/task-assignments", async (req, res) => {
   try {
     const { task_id, user_id } = req.body;
@@ -358,6 +370,7 @@ app.post("/task-assignments", async (req, res) => {
   }
 });
 
+// Removes a user's assignment, then deletes the task itself if no other assignments remain.
 app.delete("/task-assignments", async (req, res) => {
   try {
 
@@ -369,12 +382,20 @@ app.delete("/task-assignments", async (req, res) => {
       return res.status(400).json({ error: "task_id and user_id required" });
     }
 
-    const sql = `
-      DELETE FROM task_assignments
-      WHERE task_id = ? AND user_id = ?
-    `;
+    await db.query(
+      "DELETE FROM task_assignments WHERE task_id = ? AND user_id = ?",
+      [task_id, user_id]
+    );
 
-    await db.query(sql, [task_id, user_id]);
+    // If no assignments remain for this task, the task is now orphaned — remove it.
+    const [[{ remaining }]] = await db.query(
+      "SELECT COUNT(*) AS remaining FROM task_assignments WHERE task_id = ?",
+      [task_id]
+    ) as any[];
+
+    if (Number(remaining) === 0) {
+      await db.query("DELETE FROM tasks WHERE task_id = ?", [task_id]);
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -383,6 +404,7 @@ app.delete("/task-assignments", async (req, res) => {
   }
 });
 
+// Partially updates a user's profile; only fields present in the request body are written.
 app.patch("/users/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -411,6 +433,7 @@ app.patch("/users/:userId", async (req, res) => {
   }
 });
 
+// Authenticates a user by email + bcrypt password check; returns the safe user object (no hash) on success.
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -437,6 +460,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
+// Registers a new user with a bcrypt-hashed password; rejects duplicate emails with 409.
 app.post("/register", async (req, res) => {
   try {
     const { name, email, password, timezone } = req.body;
@@ -463,6 +487,10 @@ app.post("/register", async (req, res) => {
 });
 
 
-app.listen(3000, () => {
-  console.log("Server running on port 3000");
-});
+export default app;
+
+if (process.env.NODE_ENV !== "test") {
+  app.listen(3000, () => {
+    console.log("Server running on port 3000");
+  });
+}

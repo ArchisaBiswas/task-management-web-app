@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { db } from "./db";
 
+// One-time migration: adds a per-assignee status column to task_assignments and seeds it from tasks.status.
 async function main() {
   // Add status column; IF NOT EXISTS avoids error if already run
   await db.query(`
