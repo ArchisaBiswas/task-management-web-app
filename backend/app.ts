@@ -506,6 +506,9 @@ async function waitForDb(retries = 10, delayMs = 3000): Promise<void> {
 
 if (process.env.NODE_ENV !== "test") {
   waitForDb()
-    .then(() => app.listen(3000, () => console.log("Server running on port 3000")))
+    .then(() => app.listen(3000, () => {
+          console.log("🚀 BACKEND DEPLOYED VIA CD PIPELINE");
+          console.log("Server running on port 3000");
+        }))
     .catch(err => { console.error("Startup failed:", err); process.exit(1); });
 }
