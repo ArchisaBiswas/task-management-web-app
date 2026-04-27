@@ -79,9 +79,9 @@ const UpdateTaskForm = () => {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/tasks').then((r) => r.json()),
-      fetch('/api/users').then((r) => r.json()),
-      fetch('/api/assignments').then((r) => r.json()),
+      fetch('${import.meta.env.VITE_API_URL}/tasks').then((r) => r.json()),
+      fetch('${import.meta.env.VITE_API_URL}/users').then((r) => r.json()),
+      fetch('${import.meta.env.VITE_API_URL}/assignments').then((r) => r.json()),
     ])
       .then(([tasksData, usersData, assignmentsData]) => {
         setTasks(tasksData);
@@ -133,7 +133,7 @@ const UpdateTaskForm = () => {
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
 
-      const taskRes = await fetch(`/api/tasks/${selectedTaskId}`, {
+      const taskRes = await fetch(`${import.meta.env.VITE_API_URL}/tasks/${selectedTaskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -149,14 +149,14 @@ const UpdateTaskForm = () => {
 
       await Promise.all([
         ...toAdd.map((userId) =>
-          fetch('/api/task-assignments', {
+          fetch('${import.meta.env.VITE_API_URL}/task-assignments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ task_id: selectedTaskId, user_id: userId }),
           }),
         ),
         ...toRemove.map((userId) =>
-          fetch('/api/task-assignments', {
+          fetch('${import.meta.env.VITE_API_URL}/task-assignments', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ task_id: selectedTaskId, user_id: userId }),

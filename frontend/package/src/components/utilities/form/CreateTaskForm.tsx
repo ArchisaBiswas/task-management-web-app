@@ -60,7 +60,7 @@ const CreateTaskForm = () => {
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
 
-      const taskRes = await fetch('/api/tasks', {
+      const taskRes = await fetch('${import.meta.env.VITE_API_URL}/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -74,7 +74,7 @@ const CreateTaskForm = () => {
       if (!taskRes.ok) throw new Error('Failed to create task');
       const { task_id } = await taskRes.json();
 
-      const assignRes = await fetch('/api/task-assignments', {
+      const assignRes = await fetch('${import.meta.env.VITE_API_URL}/task-assignments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_id, user_id: user.user_id }),

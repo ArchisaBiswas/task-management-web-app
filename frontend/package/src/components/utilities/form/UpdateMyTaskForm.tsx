@@ -125,7 +125,7 @@ const UpdateMyTaskForm = () => {
 
   useEffect(() => {
     if (!user) return;
-    fetch(`/api/my-tasks/${user.user_id}`)
+    fetch(`${import.meta.env.VITE_API_URL}/my-tasks/${user.user_id}`)
       .then((r) => {
         if (!r.ok) throw new Error(r.statusText);
         return r.json() as Promise<ApiTask[]>;
@@ -200,7 +200,7 @@ const UpdateMyTaskForm = () => {
 
     setSaving(true);
     try {
-      const res = await fetch(`/api/tasks/${selectedTask.task_id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/tasks/${selectedTask.task_id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

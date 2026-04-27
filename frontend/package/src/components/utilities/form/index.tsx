@@ -57,7 +57,7 @@ const Form = () => {
   const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
-    fetch('/api/users')
+    fetch('${import.meta.env.VITE_API_URL}/users')
       .then((r) => r.json())
       .then((data: DbUser[]) =>
         setUsers(data.map((u) => ({ ...u, officeStatus: getOfficeStatus(u.timezone) }))),
@@ -87,7 +87,7 @@ const Form = () => {
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
 
-      const taskRes = await fetch('/api/tasks', {
+      const taskRes = await fetch('${import.meta.env.VITE_API_URL}/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -102,7 +102,7 @@ const Form = () => {
 
       await Promise.all(
         selectedAssigneeIds.map((userId) =>
-          fetch('/api/task-assignments', {
+          fetch('${import.meta.env.VITE_API_URL}/task-assignments', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ task_id, user_id: userId }),

@@ -71,7 +71,7 @@ const AllTasksPage = () => {
   const fetchStats = useCallback(async () => {
     if (!user) return;
     try {
-      const res = await fetch(`/api/stats/user/${user.user_id}`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/stats/user/${user.user_id}`);
       const d = await res.json();
       setStats({
         allTasksCount: d.all_tasks,
@@ -97,7 +97,7 @@ const AllTasksPage = () => {
   useEffect(() => {
     if (!user) return;
     fetchStats();
-    fetch(`/api/my-tasks/${user.user_id}`)
+    fetch(`${import.meta.env.VITE_API_URL}/my-tasks/${user.user_id}`)
       .then((r) => {
         if (!r.ok) throw new Error(r.statusText);
         return r.json() as Promise<ApiTask[]>;
@@ -113,7 +113,7 @@ const AllTasksPage = () => {
           const statusLower = (task.status ?? '').toLowerCase();
           if (overdue && statusLower !== 'completed' && statusLower !== 'pending') {
             patches.push(
-              fetch(`/api/tasks/${task.task_id}`, {
+              fetch(`${import.meta.env.VITE_API_URL}/tasks/${task.task_id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: 'Pending' }),
@@ -159,7 +159,7 @@ const AllTasksPage = () => {
       setApiData(updated);
       Promise.all(
         overdueIds.map((taskId) =>
-          fetch(`/api/tasks/${taskId}`, {
+          fetch(`${import.meta.env.VITE_API_URL}/tasks/${taskId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'Pending' }),

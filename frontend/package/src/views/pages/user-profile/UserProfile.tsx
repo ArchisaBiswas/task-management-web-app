@@ -103,7 +103,7 @@ const UserProfile = () => {
     const handleSave = async () => {
         if (modalType === "personal") {
             const newName = `${tempPersonal.firstName} ${tempPersonal.lastName}`.trim();
-            const res = await fetch(`/api/users/${user!.user_id}`, {
+            const res = await fetch(`${import.meta.env.VITE_API_URL}/users/${user!.user_id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
