@@ -1,6 +1,6 @@
 # TaskMent: Task Management Web Application
 
-> **Submission by Archisa Biswas for GetDomus Graduate Full-Stack Developer Technical Assessment**
+> **GetDomus Graduate Full-Stack Developer Technical Assessment: Submission by Archisa Biswas**
 
 ---
 
