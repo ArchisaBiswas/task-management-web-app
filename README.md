@@ -12,13 +12,13 @@
 4. [Database Schema](#4-database-schema)
 5. [UI Wireframe](#5-ui-wireframe)
 6. [Tech Stack Rationale](#6-tech-stack-rationale)
-7. [Feature Coverage — Assessment Checklist](#7-feature-coverage--assessment-checklist)
-8. [Core Features Deep-Dive](#8-core-features-deep-dive)
+7. [Feature Coverage](#7-feature-coverage)
+8. [Core Features](#8-core-features)
    - [Role-Based Access Control](#81-role-based-access-control-rbac)
    - [Task CRUD](#82-task-crud)
    - [Multi-Assignee System](#83-multi-assignee-system)
    - [Timezone Awareness & Working-Hours Logic](#84-timezone-awareness--working-hours-logic)
-   - [Stat Cards Logic](#85-stat-cards-logic)
+   - [Statistic Cards Logic](#85-stat-cards-logic)
    - [Overdue Task Auto-Detection](#86-overdue-task-auto-detection)
    - [Email Notifications via AWS SES](#87-email-notifications-via-aws-ses)
 9. [API Reference](#9-api-reference)
@@ -27,8 +27,6 @@
 12. [Docker & Containerisation](#12-docker--containerisation)
 13. [Testing](#13-testing)
 14. [Key Design Decisions & Assumptions](#14-key-design-decisions--assumptions)
-15. [Getting Started Locally](#15-getting-started-locally)
-16. [Project Structure](#16-project-structure)
 
 ---
 
