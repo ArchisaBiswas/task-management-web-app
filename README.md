@@ -1,7 +1,7 @@
 # TaskMent — Task Management Web Application
 
 > **Submission for GetDomus Graduate Full-Stack Developer Technical Assessment**
-> Candidate: Archisa Biswas | Deadline: 30 April 2026, 11:59 PM
+> Submitted by: Archisa Biswas
 
 ---
 
